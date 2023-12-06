@@ -23,7 +23,7 @@ with open(list_path, 'r') as list_file:
         if '.git' in root:
             continue
         for file in files:
-            if '.git' in file:
+            if '.git' in file or '.py' in file or '.pyx' in file:
                 continue
             file_path = os.path.join(root, file)
 
