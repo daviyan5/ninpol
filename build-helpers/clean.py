@@ -23,6 +23,8 @@ with open(list_path, 'r') as list_file:
         if '.git' in root:
             continue
         for file in files:
+            if '.git' in file:
+                continue
             file_path = os.path.join(root, file)
 
             if file_path not in keep_files:
