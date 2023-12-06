@@ -10,7 +10,7 @@ backup_dir = os.path.join(directory_path, 'clean-backup')
 if not os.path.exists(backup_dir):
     os.makedirs(backup_dir)
 else:
-    os.rmdir(backup_dir)
+    shutil.rmtree(backup_dir)
     os.makedirs(backup_dir)
 # Save the name of the moved files in a list
 moved_files = []
