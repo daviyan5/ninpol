@@ -2,7 +2,7 @@
 # 	python3 setup.py build_ext --inplace && python3 pip install .
 all:
 	make install
-	make clean
+	
 install: compile
 	@echo "Installing..."
 	@pip install .
