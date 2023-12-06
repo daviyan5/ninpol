@@ -36,20 +36,19 @@ ext_data = [
         )
 ]
 for e in ext_data:
-    e.cython_directives = {
-        'boundscheck': False,
-        'wraparound' : False,
-        'cdivision'  : True
-    }
     e.extra_compile_args = ['-O3', '-fopenmp']
     e.extra_link_args    = ['-fopenmp']
     e.define_macros      = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+directives = {
+    'boundscheck': False,
+    'wraparound' : False,
+    'cdivision'  : True
+}
 setup(
     name        = 'interpolator',
     version     = '0.0.1',
     author      = 'Davi Yan',
     description = 'Interpolator for MPFA methods',
-    package_dir = {'': '.'},
-    packages    = find_packages(),
-    ext_modules = cythonize(ext_data, language_level = '3', nthreads=4)
+
+    ext_modules = cythonize(ext_data, language_level = '3', nthreads=4, annotate=True, compiler_directives=directives)
 )
