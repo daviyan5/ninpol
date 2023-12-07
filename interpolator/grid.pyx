@@ -5,6 +5,7 @@ This file contains the "Grid" class definition, for mesh manipulation.
 import numpy as np
 cimport numpy as cnp
 from cython.parallel cimport parallel, prange
+from libc.stdio cimport printf
 cimport openmp
 
 cnp.import_array()                  # Needed to use NumPy C API
@@ -54,7 +55,7 @@ cdef class Grid:
 
         
 
-    cpdef void build(self, cnp.ndarray[DTYPE_I_t, ndim=2] connectivity):
+    cpdef void build(self, DTYPE_I_t [:, :] connectivity):
         """
             Builds the Elements surrounding points connectivity (esup) and the Points surrounding points connectivity (psup) from the connectivity matrix.
             0-based indexing is assumed.
@@ -71,15 +72,22 @@ cdef class Grid:
         if connectivity.shape[1] != self.n_points_per_elem:
             raise ValueError("The number of columns in the connectivity matrix must be equal to the number of points per element.")
 
-        cdef int i, j
+        cdef:
+            int i, j
+            int tid
+        # Initialize the lock
+
         # Reshape the arrays
         self.esup_ptr = np.zeros(self.n_points+1, dtype=np.int32)
         self.psup_ptr = np.zeros(self.n_points+1, dtype=np.int32)
+
+         
         # Count the number of elements surrounding each point
+        
         for i in range(self.n_elems):
             for j in range(self.n_points_per_elem):
                 self.esup_ptr[connectivity[i, j] + 1] += 1
-
+        
         # Compute the cumulative sum of the number of elements surrounding each point
         for i in range(self.n_points):
             self.esup_ptr[i + 1] += self.esup_ptr[i]
@@ -114,7 +122,7 @@ cdef class Grid:
                         stor_ptr += 1
                         
             self.psup_ptr[i+1] = stor_ptr
-  
+        self.psup = self.psup[:stor_ptr]
 
 
 
