@@ -22,6 +22,7 @@ with open(list_path, 'r') as list_file:
     for root, dirs, files in os.walk(parent_path):
         if '.git' in root:
             continue
+        
         for file in files:
             if '.git' in file or '.py' in file or '.pyx' in file:
                 continue

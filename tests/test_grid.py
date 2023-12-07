@@ -1,109 +1,154 @@
 import pytest
-import interpolator.grid
 import numpy as np
+import numba as nb
+import warnings
 import time
+from colorama import init as colorama_init
+from colorama import Fore
+from colorama import Style
 
-def create_esup(connectivity, n_elems, n_points_per_elem, n_points):
+import interpolator.grid
+import grid_np
+
+# Test parameters
+MIN_ELEM    = 5
+MAX_ELEM    = 3e4
+n_test      = 6
+n_repeats   = 3
+n_elems_sp  = np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_test, dtype=np.int32)
+div_sp      = np.linspace(3, 10, n_test, dtype=np.int32)
+
+class TestGrid:
     
-    # Check that the connectivity matrix is not None and has the correct shape
-    if connectivity is None:
-        raise ValueError("The connectivity matrix cannot be None.")
-    if connectivity.shape[0] != n_elems:
-        raise ValueError("The number of rows in the connectivity matrix must be equal to the number of elements.")
-    if connectivity.shape[1] != n_points_per_elem:
-        raise ValueError("The number of columns in the connectivity matrix must be equal to the number of points per element.")
-    
-    
-    esup_ptr = np.bincount(connectivity.ravel() + 1, minlength=n_points + 1)
-    esup_ptr = np.cumsum(esup_ptr)
-    esup = np.zeros(esup_ptr[n_points], dtype=np.int32)
+    def test_grid_build(self):
+        """
+        Tests wether the grid is built correctly.
+        """
+        print(f"\n{Fore.CYAN}Testing correctness ========================================{Style.RESET_ALL}")
+        print("{}{:<5} {:<15} {:<15} {:<15} {:<5}{}".format(Fore.GREEN, 
+                                                            "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Status",
+                                                            Style.RESET_ALL))
+        for case in range(n_test):
+            n_elems           = n_elems_sp[case]
+            n_points_per_elem = np.ceil(np.sqrt(case) + 2).astype(int)
+            div               = div_sp[case]
+            n_points          = n_elems * n_points_per_elem // div
 
-    for i in range(n_elems):
-        for j in range(n_points_per_elem):
-            esup[esup_ptr[connectivity[i, j]]] = i
-            esup_ptr[connectivity[i, j]] += 1
-        
-    for i in range(n_points, 0, -1):
-        esup_ptr[i] = esup_ptr[i-1]
+            zfill_len = int(np.ceil(np.log10(n_test)))
+            index_str = "["+str(case).zfill(zfill_len)+"]"
+            temp_str = "Building grid..."
+            print(f"{Fore.YELLOW}{index_str:<5} {temp_str:<15} {Style.RESET_ALL}", end="\r")
+            rand_array = np.zeros((n_elems, n_points_per_elem), dtype=np.int32).flatten()
+            rand_array[:n_points * div] = np.tile(np.arange(n_points), div)
+            rand_array = rand_array.reshape((n_elems, n_points_per_elem)).astype(np.int64)
 
-    esup_ptr[0] = 0
+            esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
 
-    psup_ptr = np.zeros(n_points + 1, dtype=np.int32)
-    psup = np.zeros(esup_ptr[n_points] * (n_points_per_elem - 1), dtype=np.int32)
-    stor_ptr = 0
-    for i in range(n_points):
-        elems = esup[esup_ptr[i]:esup_ptr[i+1]]
-        if elems.shape[0] == 0:
-            continue
-        x = connectivity[elems, :].flatten()
-        mx    = np.max(x) + 1
-        used  = np.zeros(mx,dtype=np.uint8)
-        used[x] = 1
-        points = np.argwhere(used == 1)[:,0]
-        points = points[points != i]
-        psup[stor_ptr:stor_ptr + points.shape[0]] = points
-        psup_ptr[i+1] = psup_ptr[i] + points.shape[0]
-        stor_ptr += points.shape[0]
-    
-    return esup, esup_ptr, psup, psup_ptr
-
-def test_grid():
-   
-    n_tests = 10
-    n_repeats = 10
-    avg_speedup = 0
-    nelems_sp = np.linspace(100, 1e5, n_tests, dtype=np.int32)
-    div_sp = np.linspace(9, 3, n_tests, dtype=np.int32)
-    for case in range(1, n_tests):
-        
-        n_elems = nelems_sp[case]
-        n_points_per_elem = np.ceil(np.sqrt(case) + 2).astype(int)
-        div = div_sp[case]
-        n_points = (n_elems * n_points_per_elem) // div
-        print(f"[{str(case).zfill(2)}] \t n_elems: {n_elems}, n_points_per_elem: {n_points_per_elem}, n_points: {n_points}")
-        grid = interpolator.grid.Grid(2, n_elems, n_points, n_points_per_elem)
-        rand_array = np.zeros((n_elems, n_points_per_elem), dtype=np.int32).flatten()
-        # Repeat np.arange(n_points) div times
-        rand_array[:n_points * div] = np.tile(np.arange(n_points), div)
-        # Shuffle the array
-        np.random.shuffle(rand_array)
-        rand_array = rand_array.reshape((n_elems, n_points_per_elem)).astype(np.int64)
-        local_avg = 0
-        esup, esup_ptr, psup, psup_ptr = None, None, None, None
-        for j in range(n_repeats):
-            start = time.time()
+            grid = interpolator.grid.Grid(2, n_elems, n_points, n_points_per_elem)
             grid.build(rand_array)
-            end = time.time()
-            elapsed_cpnp = end - start
             
-            start = time.time()
-            esup, esup_ptr, psup, psup_ptr = create_esup(rand_array, n_elems, n_points_per_elem, n_points)
-            end = time.time()
-            elapsed_pynp = end - start
+            assert grid.esup is not None,                       "The esup array cannot be None."
+            assert grid.esup_ptr is not None,                   "The esup_ptr array cannot be None."
+            assert grid.esup_ptr.shape == (n_points + 1, ),     "The esup_ptr array has the wrong shape."
 
-            speedup = round(elapsed_pynp/elapsed_cpnp, 3)
-            local_avg += speedup
-        
-        print(f"[{str(case).zfill(2)}] \t Cython Speedup: {local_avg / n_repeats} times")
-        avg_speedup += local_avg / n_repeats
-        print(f"[{str(case).zfill(2)}] \t Average Speedup: {round(avg_speedup/case, 3)} times")
-        print()
+            assert grid.psup is not None,                       "The psup array cannot be None."
+            assert grid.psup_ptr is not None,                   "The psup_ptr array cannot be None."
+            assert grid.psup_ptr.shape == (n_points + 1, ),     "The psup_ptr array has the wrong shape."
+            
+            assert np.all(grid.esup_ptr == esup_ptr),           "The esup_ptr array is incorrect."
+            assert np.all(grid.esup == esup),                   "The esup array is incorrect."
+            
+            assert np.all(grid.psup_ptr == psup_ptr),           "The psup_ptr array is incorrect."
+            assert np.all(np.sort(grid.psup) == np.sort(psup)), "The psup array is incorrect."
+            print(f"{index_str:<5} {n_elems:<15} {n_points_per_elem:<15} {n_points:<15}", end="")
+            status = "OK"
+            print(f" {Fore.GREEN}{status:<5}{Style.RESET_ALL}")
+        print(f"{Fore.CYAN}============================================================={Style.RESET_ALL}")
+    
+    def test_grid_speed(self):
+        """
+        Tests wether the grid is built efficiently.
+        """
+        print(f"\n{Fore.CYAN}Testing speed ------------------------------------------------------------------------------{Style.RESET_ALL}")
+        print(f"{Fore.LIGHTWHITE_EX}", end="")
+        print("{}{:<5} {:<15} {:<15} {:<15} {:<15} {:<15} {:<5}{}".format(Fore.GREEN,
+                                                                          "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Speedup", "Global Speedup", "Status",
+                                                                          Style.RESET_ALL))
+        print(f"{Style.RESET_ALL}", end="")
+        global_avg = 0.
+        first_call = True
+        suboptimal = []
+        for case in range(n_test):
+            n_elems           = n_elems_sp[case]
+            n_points_per_elem = np.ceil(np.sqrt(case) + 2).astype(int)
+            div               = div_sp[case]
+            n_points          = n_elems * n_points_per_elem // div
 
-        assert grid.esup is not None,                       "The esup array cannot be None."
-        assert grid.esup_ptr is not None,                   "The esup_ptr array cannot be None."
-        assert grid.esup_ptr.shape == (n_points + 1, ),     "The esup_ptr array has the wrong shape."
+            
+            rand_array = np.zeros((n_elems, n_points_per_elem), dtype=np.int32).flatten()
+            rand_array[:n_points * div] = np.tile(np.arange(n_points), div)
+            np.random.shuffle(rand_array)
+            rand_array = rand_array.reshape((n_elems, n_points_per_elem)).astype(np.int64)
 
-        assert grid.psup is not None,                       "The psup array cannot be None."
-        assert grid.psup_ptr is not None,                   "The psup_ptr array cannot be None."
-        assert grid.psup_ptr.shape == (n_points + 1, ),     "The psup_ptr array has the wrong shape."
-        
-        assert np.all(grid.esup_ptr == esup_ptr),           "The esup_ptr array is incorrect."
-        assert np.all(grid.esup == esup),                   "The esup array is incorrect."
-        
-        
-        assert np.all(grid.psup_ptr == psup_ptr),           "The psup_ptr array is incorrect."
-        assert np.all(np.sort(grid.psup) == np.sort(psup)), "The psup array is incorrect."
-        
+            if first_call:
+                esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
+                first_call = False
+            grid = interpolator.grid.Grid(2, n_elems, n_points, n_points_per_elem)
+
+            local_avg = 0.
+            for rep in range(n_repeats):
+                zfill_len = int(np.ceil(np.log10(n_test)))
+                rep_str = "["+str(rep).zfill(zfill_len)+"]"
+                temp_str = "Cur Speedup:"
+                print(f"{Fore.YELLOW}{rep_str:<5} {temp_str:<15} {round(local_avg/(rep + 1), 2)} {Style.RESET_ALL}", end="\r")
+                start = time.time()
+                grid.build(rand_array)
+                end = time.time()
+                elapsed_cpnp = end - start
+                
+                start = time.time()
+                esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
+                end = time.time()
+                elapsed_pynp = end - start
+
+                local_avg +=  elapsed_pynp / elapsed_cpnp
+
+            local_speedup = local_avg / n_repeats
+            global_avg += local_speedup
+            global_speedup = global_avg / (case + 1)
+
+            local_speedup = np.round(local_speedup, 2)
+            global_speedup = np.round(global_speedup, 2)
+
+            zfill_len = int(np.ceil(np.log10(n_test)))
+            index_str = "["+str(case).zfill(zfill_len)+"]"
+            print(f"{index_str:<5} {n_elems:<15} {n_points_per_elem:<15} {n_points:<15} {local_speedup:<15} {global_speedup:<15}", end="")
+
+            assert grid.esup is not None,                       "The esup array cannot be None."
+            assert grid.esup_ptr is not None,                   "The esup_ptr array cannot be None."
+            assert grid.esup_ptr.shape == (n_points + 1, ),     "The esup_ptr array has the wrong shape."
+
+            assert grid.psup is not None,                       "The psup array cannot be None."
+            assert grid.psup_ptr is not None,                   "The psup_ptr array cannot be None."
+            assert grid.psup_ptr.shape == (n_points + 1, ),     "The psup_ptr array has the wrong shape."
+            
+            assert np.all(grid.esup_ptr == esup_ptr),           "The esup_ptr array is incorrect."
+            assert np.all(grid.esup == esup),                   "The esup array is incorrect."
+            
+            assert np.all(grid.psup_ptr == psup_ptr),           "The psup_ptr array is incorrect."
+            assert np.all(np.sort(grid.psup) == np.sort(psup)), "The psup array is incorrect."
+
+            status = "FAST!" if local_speedup > 10. else "OK" if local_speedup > 5. else "SLOW" if local_speedup > 1. else "SLOW!!"
+            print(f" {Fore.GREEN if local_speedup > 10. else Fore.LIGHTGREEN_EX if local_speedup > 5. else Fore.YELLOW if local_speedup > 1. else Fore.RED}{status:<5}{Style.RESET_ALL}")
+
+            if local_speedup <= 2.:
+                suboptimal.append(case)
+
+
+        print(f"{Fore.CYAN}-------------------------------------------------------------------------------------------{Style.RESET_ALL}")
+
+            
+            
 
 
 
