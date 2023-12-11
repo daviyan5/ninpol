@@ -1,39 +1,12 @@
 """
-This file contains the "Grid" class definition, for mesh manipulation. 
+This file contains the "Grid" class implementation
 """
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
 import numpy as np
-cimport numpy as cnp
-from cython.parallel cimport parallel, prange
-from libc.stdio cimport printf
-cimport openmp
-
-cnp.import_array()                  # Needed to use NumPy C API
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
 
-ctypedef cnp.int64_t DTYPE_I_t
-ctypedef cnp.float64_t DTYPE_F_t
-
 cdef class Grid:
-    """
-    Stores and manipulates the mesh data.
-    This is a class intended to be used only from Cython, specifically from the 'interpolator.pyx' file.
-    """
-    cdef int n_dims                                 # Number of dimensions
-    cdef int n_elems                                # Number of elements
-    cdef int n_points                               # Number of points (vertices)
-    cdef int n_points_per_elem                      # Number of points per element
-
-    cdef public int[:] esup                         # Elements surrounding points connectivity
-    cdef public int[:] esup_ptr                     # Elements surrounding points pointer. 
-                                                    #   i.e: The elements surrounding point i are in esup[esup_ptr[i]:esup_ptr[i+1]]
-
-    cdef public int[:] psup                         # Points surrounding points connectivity
-    cdef public int[:] psup_ptr                     # Points surrounding points pointer. 
-                                                    #   i.e: The points surrounding point i are in psup[psup_ptr[i]:psup_ptr[i+1]]
-
     def __cinit__(self, DTYPE_I_t n_dims, DTYPE_I_t n_elems, DTYPE_I_t n_points, DTYPE_I_t n_points_per_elem):
         """
         Initializes the grid.

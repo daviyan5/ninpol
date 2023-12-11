@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 
 directory_path = os.path.dirname(os.path.abspath(__file__)) 
 
-project_name = 'interpolator'
+project_name = 'ninpol'
 ext_data = [
         Extension(
             name = f'{project_name}.grid',
@@ -47,10 +47,10 @@ directives = {
     'cdivision'         : True
 }
 setup(
-    name        = 'interpolator',
+    name        =  project_name,
     version     = '0.0.1',
     author      = 'Davi Yan',
-    description = 'Interpolator for MPFA methods',
+    description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
 
     ext_modules = cythonize(ext_data, language_level = '3', nthreads=4, annotate=True, compiler_directives=directives, force=True)
 )

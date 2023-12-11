@@ -7,20 +7,37 @@ from colorama import init as colorama_init
 from colorama import Fore
 from colorama import Style
 
-import interpolator.grid
+import ninpol.grid
 import grid_np
 
 # Test parameters
+
 MIN_ELEM    = 5
 MAX_ELEM    = 3e4
 n_test      = 6
 n_repeats   = 3
-n_elems_sp  = np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_test, dtype=np.int32)
+linear      = False
+
+# Test arrays
+n_elems_sp  = np.linspace(MIN_ELEM, MAX_ELEM, n_test, dtype=np.int32) if linear else np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_test, dtype=np.int32)
 div_sp      = np.linspace(3, 10, n_test, dtype=np.int32)
 
+
+
 class TestGrid:
-    
+    @pytest.fixture(autouse=True)
+    def set_parameters(self, request):
+        global MIN_ELEM, MAX_ELEM, n_test, n_repeats, linear, n_elems_sp, div_sp
+        MIN_ELEM    = int(request.config.getoption("--min-elem", default=MIN_ELEM))
+        MAX_ELEM    = int(request.config.getoption("--max-elem", default=MAX_ELEM))
+        n_test      = int(request.config.getoption("--n-test", default=n_test))
+        n_repeats   = int(request.config.getoption("--n-repeats", default=n_repeats))
+        linear      = bool(request.config.getoption("--linear", default=linear))
+        n_elems_sp  = np.linspace(MIN_ELEM, MAX_ELEM, n_test, dtype=np.int32) if linear else np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_test, dtype=np.int32)
+        div_sp      = np.linspace(3, 10, n_test, dtype=np.int32)
+
     def test_grid_build(self):
+        
         """
         Tests wether the grid is built correctly.
         """
@@ -44,7 +61,7 @@ class TestGrid:
 
             esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
 
-            grid = interpolator.grid.Grid(2, n_elems, n_points, n_points_per_elem)
+            grid = ninpol.grid.Grid(2, n_elems, n_points, n_points_per_elem)
             grid.build(rand_array)
             
             assert grid.esup is not None,                       "The esup array cannot be None."
@@ -93,7 +110,7 @@ class TestGrid:
             if first_call:
                 esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
                 first_call = False
-            grid = interpolator.grid.Grid(2, n_elems, n_points, n_points_per_elem)
+            grid = ninpol.grid.Grid(2, n_elems, n_points, n_points_per_elem)
 
             local_avg = 0.
             for rep in range(n_repeats):
