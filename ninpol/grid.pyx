@@ -1,7 +1,11 @@
 """
 This file contains the "Grid" class implementation
 """
+
 import numpy as np
+from libc.stdio cimport printf
+from cython.parallel cimport parallel, prange
+cimport openmp
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
@@ -28,10 +32,11 @@ cdef class Grid:
 
         
 
-    cpdef void build(self, DTYPE_I_t [:, :] connectivity):
+    cpdef void build(self, DTYPE_I_t[:, ::1] connectivity):
         """
             Builds the Elements surrounding points connectivity (esup) and the Points surrounding points connectivity (psup) from the connectivity matrix.
             0-based indexing is assumed.
+            Assumes connectivity is contiguous in memory.
             Parameter
             ---------
                 connectivity : np.ndarray
@@ -48,15 +53,12 @@ cdef class Grid:
         cdef:
             int i, j
             int tid
-        # Initialize the lock
-
+            
         # Reshape the arrays
-        self.esup_ptr = np.zeros(self.n_points+1, dtype=np.int32)
-        self.psup_ptr = np.zeros(self.n_points+1, dtype=np.int32)
+        self.esup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
+        self.psup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
 
-         
-        # Count the number of elements surrounding each point
-        
+        # Count the number of elements surrounding each point    
         for i in range(self.n_elems):
             for j in range(self.n_points_per_elem):
                 self.esup_ptr[connectivity[i, j] + 1] += 1
@@ -66,7 +68,7 @@ cdef class Grid:
             self.esup_ptr[i + 1] += self.esup_ptr[i]
 
         # Fill the esup array
-        self.esup = np.zeros(self.esup_ptr[self.n_points], dtype=np.int32)
+        self.esup = np.zeros(self.esup_ptr[self.n_points], dtype=DTYPE_I)
         for i in range(self.n_elems):
             for j in range(self.n_points_per_elem):
                 self.esup[self.esup_ptr[connectivity[i, j]]] = i
@@ -78,11 +80,11 @@ cdef class Grid:
 
         cdef:
             int stor_ptr = 0, point_idx
-            int[:] temp_psup = np.ones(self.n_points, dtype=np.int32) * -1
+            DTYPE_I_t[::1] temp_psup = np.ones(self.n_points, dtype=DTYPE_I) * -1
         self.psup_ptr[0] = 0
     
         # Upper bound for the number of points surrounding each point
-        self.psup = np.zeros((self.esup_ptr[self.n_points] * (self.n_points_per_elem - 1)), dtype=np.int32) # Peharps this can be improved
+        self.psup = np.zeros((self.esup_ptr[self.n_points] * (self.n_points_per_elem - 1)), dtype=DTYPE_I) # Peharps this can be improved
 
         # Calculate the points surrounding each point, using temp_psup to avoid duplicates
         for i in range(self.n_points):

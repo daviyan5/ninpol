@@ -13,29 +13,32 @@ import grid_np
 # Test parameters
 
 MIN_ELEM    = 5
-MAX_ELEM    = 3e4
-n_test      = 6
+MAX_ELEM    = 5e4
+n_tests     = 15
 n_repeats   = 3
 linear      = False
 
 # Test arrays
-n_elems_sp  = np.linspace(MIN_ELEM, MAX_ELEM, n_test, dtype=np.int32) if linear else np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_test, dtype=np.int32)
-div_sp      = np.linspace(3, 10, n_test, dtype=np.int32)
+n_elems_sp  = np.linspace(MIN_ELEM, MAX_ELEM, n_tests, dtype=np.int32) if linear else np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_tests, dtype=np.int32)
+div_sp      = np.linspace(3, 10, n_tests, dtype=np.int32)
 
 
 
 class TestGrid:
     @pytest.fixture(autouse=True)
     def set_parameters(self, request):
-        global MIN_ELEM, MAX_ELEM, n_test, n_repeats, linear, n_elems_sp, div_sp
+        global MIN_ELEM, MAX_ELEM, n_tests, n_repeats, linear, n_elems_sp, div_sp
         MIN_ELEM    = int(request.config.getoption("--min-elem", default=MIN_ELEM))
         MAX_ELEM    = int(request.config.getoption("--max-elem", default=MAX_ELEM))
-        n_test      = int(request.config.getoption("--n-test", default=n_test))
+        n_tests     = int(request.config.getoption("--n-test", default=n_tests))
         n_repeats   = int(request.config.getoption("--n-repeats", default=n_repeats))
         linear      = bool(request.config.getoption("--linear", default=linear))
-        n_elems_sp  = np.linspace(MIN_ELEM, MAX_ELEM, n_test, dtype=np.int32) if linear else np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_test, dtype=np.int32)
-        div_sp      = np.linspace(3, 10, n_test, dtype=np.int32)
+        n_elems_sp  = np.linspace(MIN_ELEM, MAX_ELEM, n_tests, dtype=np.int32) if linear else np.logspace(np.log10(MIN_ELEM), np.log10(MAX_ELEM), n_tests, dtype=np.int32)
+        div_sp      = np.linspace(3, 10, n_tests, dtype=np.int32)
 
+    def test_imports(self):
+        from ninpol import Grid
+        from ninpol import Interpolator
     def test_grid_build(self):
         
         """
@@ -45,20 +48,22 @@ class TestGrid:
         print("{}{:<5} {:<15} {:<15} {:<15} {:<5}{}".format(Fore.GREEN, 
                                                             "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Status",
                                                             Style.RESET_ALL))
-        for case in range(n_test):
+        for case in range(n_tests):
             n_elems           = n_elems_sp[case]
             n_points_per_elem = np.ceil(np.sqrt(case) + 2).astype(int)
             div               = div_sp[case]
             n_points          = n_elems * n_points_per_elem // div
 
-            zfill_len = int(np.ceil(np.log10(n_test)))
+            zfill_len = int(np.ceil(np.log10(n_tests)))
             index_str = "["+str(case).zfill(zfill_len)+"]"
-            temp_str = "Building grid..."
+            temp_str = "Building matrix..."
             print(f"{Fore.YELLOW}{index_str:<5} {temp_str:<15} {Style.RESET_ALL}", end="\r")
             rand_array = np.zeros((n_elems, n_points_per_elem), dtype=np.int32).flatten()
             rand_array[:n_points * div] = np.tile(np.arange(n_points), div)
             rand_array = rand_array.reshape((n_elems, n_points_per_elem)).astype(np.int64)
-
+            rand_array = np.ascontiguousarray(rand_array)
+            temp_str = "Building grid..."
+            print(f"{Fore.YELLOW}{index_str:<5} {temp_str:<15} {Style.RESET_ALL}", end="\r")
             esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
 
             grid = ninpol.grid.Grid(2, n_elems, n_points, n_points_per_elem)
@@ -95,7 +100,7 @@ class TestGrid:
         global_avg = 0.
         first_call = True
         suboptimal = []
-        for case in range(n_test):
+        for case in range(n_tests):
             n_elems           = n_elems_sp[case]
             n_points_per_elem = np.ceil(np.sqrt(case) + 2).astype(int)
             div               = div_sp[case]
@@ -106,7 +111,7 @@ class TestGrid:
             rand_array[:n_points * div] = np.tile(np.arange(n_points), div)
             np.random.shuffle(rand_array)
             rand_array = rand_array.reshape((n_elems, n_points_per_elem)).astype(np.int64)
-
+            rand_array = np.ascontiguousarray(rand_array)
             if first_call:
                 esup, esup_ptr, psup, psup_ptr = grid_np.build(rand_array, n_elems, n_points_per_elem, n_points)
                 first_call = False
@@ -114,7 +119,7 @@ class TestGrid:
 
             local_avg = 0.
             for rep in range(n_repeats):
-                zfill_len = int(np.ceil(np.log10(n_test)))
+                zfill_len = int(np.ceil(np.log10(n_tests)))
                 rep_str = "["+str(rep).zfill(zfill_len)+"]"
                 temp_str = "Cur Speedup:"
                 print(f"{Fore.YELLOW}{rep_str:<5} {temp_str:<15} {round(local_avg/(rep + 1), 2)} {Style.RESET_ALL}", end="\r")
@@ -137,7 +142,7 @@ class TestGrid:
             local_speedup = np.round(local_speedup, 2)
             global_speedup = np.round(global_speedup, 2)
 
-            zfill_len = int(np.ceil(np.log10(n_test)))
+            zfill_len = int(np.ceil(np.log10(n_tests)))
             index_str = "["+str(case).zfill(zfill_len)+"]"
             print(f"{index_str:<5} {n_elems:<15} {n_points_per_elem:<15} {n_points:<15} {local_speedup:<15} {global_speedup:<15}", end="")
 

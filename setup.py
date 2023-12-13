@@ -4,9 +4,18 @@ from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 
 directory_path = os.path.dirname(os.path.abspath(__file__)) 
-
+n_threads = os.cpu_count()
 project_name = 'ninpol'
 ext_data = [
+        Extension(
+            name = f'{project_name}.__init__',
+            sources = [
+                os.path.join(directory_path, project_name, '__init__.pyx')
+            ],
+            include_dirs = [
+                np.get_include()
+            ]
+        ),
         Extension(
             name = f'{project_name}.grid',
             sources = [
@@ -45,12 +54,17 @@ directives = {
     'nonecheck'         : False,
     'initializedcheck'  : False,
     'cdivision'         : True
-}
+    }
 setup(
     name        =  project_name,
     version     = '0.0.1',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
 
-    ext_modules = cythonize(ext_data, language_level = '3', nthreads=4, annotate=True, compiler_directives=directives, force=True)
+    ext_modules = cythonize(ext_data, 
+                            language_level      =   '3', 
+                            nthreads            =   n_threads, 
+                            annotate            =   True, 
+                            compiler_directives =   directives, 
+                            force               =   True)
 )
