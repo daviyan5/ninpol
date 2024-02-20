@@ -57,8 +57,7 @@ def build(n_dims, n_points, n_elems, n_point_to_type, nfael, lnofa, lpofa, conne
 
     esup, esup_ptr = build_esup(n_elems, n_points, inpoel, n_points_per_elem)
     psup, psup_ptr = build_psup(n_points, inpoel, esup, esup_ptr)
-    #esuel = build_esuel(n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_ptr)
-    esuel = np.zeros((n_elems, 6), dtype=np.int32)
+    esuel = build_esuel(n_points, n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_ptr)
     if n_dims == 3:
         build_inpoed()
         build_ledel()
@@ -108,20 +107,28 @@ def build_psup(n_points, inpoel, esup, esup_ptr):
     return psup, psup_ptr
 
 @nb.njit()
-def build_esuel(n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_ptr):
+def build_esuel(n_points, n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_ptr):
     esuel = np.ones((n_elems, 6), dtype=np.int32) * -1
-
     # For each element
+    ielem_face = np.zeros(4, dtype=np.int32)
+    ielem_face_index = np.zeros(4, dtype=np.int32)
+    jelem_face_index = np.zeros(4, dtype=np.int32)
+
     for ielem in range(n_elems):
         ielem_type = element_types[ielem]
 
         # For each face
         for j in range(nfael[ielem_type]):
-            # Choose a point from the face
-            ielem_face = lpofa[ielem_type, j].copy()
-            for k in range(lnofa[ielem_type, j]):
-                ielem_face[k] = inpoel[ielem, ielem_face[k]]
 
+            if esuel[ielem, j] != -1:
+                continue
+            # Choose a point from the face
+            ielem_face_index = lpofa[ielem_type, j]
+            for k in range(lnofa[ielem_type, j]):
+                ielem_face[k] = inpoel[ielem, ielem_face_index[k]]
+
+            for k in range (4 - lnofa[ielem_type, j]):
+                ielem_face[3 - k] = -1
             point = ielem_face[0]
             num_elems_min = esup_ptr[point+1] - esup_ptr[point]
 
@@ -133,7 +140,7 @@ def build_esuel(n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_
                     point = kpoint
                     num_elems_min = num_elems
 
-            ielem_face = np.sort(ielem_face)
+
             found_elem = False
 
             # For each element around the point
@@ -146,15 +153,20 @@ def build_esuel(n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_
 
                     # For each face of the element around the point
                     for l in range(nfael[jelem_type]):
-                        
-                        jelem_face = lpofa[jelem_type, l].copy()
-                        for m in range(lnofa[jelem_type, l]):
-                            jelem_face[m] = inpoel[jelem, jelem_face[m]]
-                            
-                        jelem_face = np.sort(jelem_face)
+                        is_equal = 0
+                        jelem_face_index = lpofa[jelem_type, l]
 
+                        for m in range(lnofa[jelem_type, l]):
+                            jelem_face_point = inpoel[jelem, jelem_face_index[m]]
+                            if (jelem_face_point == ielem_face[0] or 
+                                jelem_face_point == ielem_face[1] or 
+                                jelem_face_point == ielem_face[2] or 
+                                jelem_face_point == ielem_face[3]):
+                                is_equal += 1
+
+                            
                         # If the face of the element around the point is equal to the face of the current element
-                        if np.array_equal(ielem_face, jelem_face):
+                        if is_equal == lnofa[ielem_type, j]:
 
                             # Add the element around the point to the list of elements around the current element
                             esuel[ielem, j] = jelem
@@ -162,11 +174,15 @@ def build_esuel(n_elems, inpoel, element_types, nfael, lnofa, lpofa, esup, esup_
                             esuel[jelem, l] = ielem
 
                             found_elem = True
-                            break
-
+                        
+                        
                         if found_elem:
                             break
-                
+
+
+                if found_elem:
+                    break
+    
     return esuel
 
 @nb.njit()

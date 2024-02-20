@@ -24,6 +24,7 @@ ext_data = [
             include_dirs = [
                 np.get_include()
             ]
+            #,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
         ),
         Extension(
             name = f'{project_name}.interpolator',
@@ -59,8 +60,12 @@ directives = {
     'wraparound'        : False,
     'nonecheck'         : False,
     'initializedcheck'  : False,
-    'cdivision'         : True
+    'cdivision'         : True,
+    'profile'           : False,
+    'linetrace'         : False
     }
+
+
 
 setup(
     name        =  project_name,
@@ -74,5 +79,5 @@ setup(
                             nthreads            =   n_threads, 
                             annotate            =   True, 
                             compiler_directives =   directives, 
-                            force               =   True)
+                            force               =   False)
 )

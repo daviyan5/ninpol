@@ -107,7 +107,7 @@ cdef class Grid:
         self.build_psup()
 
         # Calculate the elements surrounding each element
-        # self.build_esuel()
+        self.build_esuel()
 
         # Calculate the points that form each edge
         if self.n_dims == 3:
@@ -171,29 +171,46 @@ cdef class Grid:
         self.psup = self.psup[:stor_ptr]
 
     cdef void build_esuel(self):
-
+        
         # Declare every variable
         cdef:
             int j, k, l, m
             int ielem, jelem
             int ielem_type, jelem_type
+
             DTYPE_I_t[::1] ielem_face = np.zeros(4, dtype=DTYPE_I)
             DTYPE_I_t[::1] jelem_face = np.zeros(4, dtype=DTYPE_I)
+
+            DTYPE_I_t[::1] ielem_face_index = np.zeros(4, dtype=DTYPE_I)
+            DTYPE_I_t[::1] jelem_face_index = np.zeros(4, dtype=DTYPE_I)
+
             int point, kpoint
             int num_elems, num_elems_min
             int found_elem
+            int jelem_face_point
+            int is_equal 
+            
 
         self.esuel = np.ones((self.n_elems, 6), dtype=DTYPE_I) * -1
+
         # For each element
         for ielem in range(self.n_elems):
             ielem_type = self.element_types[ielem]
 
             # For each face
             for j in range(self.nfael[ielem_type]):
+
+                if self.esuel[ielem, j] != -1:
+                    continue
+                    
                 # Choose a point from the face
-                ielem_face = self.lpofa[ielem_type, j].copy()
+                ielem_face_index = self.lpofa[ielem_type, j]
+                
                 for k in range(self.lnofa[ielem_type, j]):
-                    ielem_face[k] = self.inpoel[ielem, ielem_face[k]]
+                    ielem_face[k] = self.inpoel[ielem, ielem_face_index[k]]
+                
+                for k in range(4 - self.lnofa[ielem_type, j]):
+                    ielem_face[3 - k] = -1
 
                 point = ielem_face[0]
                 num_elems_min = self.esup_ptr[point+1] - self.esup_ptr[point]
@@ -206,7 +223,7 @@ cdef class Grid:
                         point = kpoint
                         num_elems_min = num_elems
 
-                ielem_face = np.sort(ielem_face)
+
                 found_elem = False
 
                 # For each element around the point
@@ -219,16 +236,18 @@ cdef class Grid:
 
                         # For each face of the element around the point
                         for l in range(self.nfael[jelem_type]):
-                            
-                            jelem_face = self.lpofa[jelem_type, l].copy()
-
+                            jelem_face_index = self.lpofa[jelem_type, l]
+                            is_equal = 0
                             for m in range(self.lnofa[jelem_type, l]):
-                                jelem_face[m] = self.inpoel[jelem, jelem_face[m]]
-                                
-                            jelem_face = np.sort(jelem_face)
+                                jelem_face_point = self.inpoel[jelem, jelem_face_index[m]]
 
-                            # If the face of the element around the point is equal to the face of the current element
-                            if np.array_equal(ielem_face, jelem_face):
+                                if(jelem_face_point == ielem_face[0] or 
+                                   jelem_face_point == ielem_face[1] or 
+                                   jelem_face_point == ielem_face[2] or 
+                                   jelem_face_point == ielem_face[3]):
+                                    is_equal += 1
+                        
+                            if is_equal == self.lnofa[ielem_type, j]:
 
                                 # Add the element around the point to the list of elements around the current element
                                 self.esuel[ielem, j] = jelem
@@ -236,10 +255,14 @@ cdef class Grid:
                                 self.esuel[jelem, l] = ielem
 
                                 found_elem = True
+
+                            if found_elem:
                                 break
 
-                        if found_elem:
-                            break
+                    if found_elem:
+                        break
+
+        
                 
                
     cdef void build_inpoed(self):
