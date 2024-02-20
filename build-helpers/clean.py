@@ -24,7 +24,7 @@ with open(list_path, 'r') as list_file:
             continue
         
         for file in files:
-            if '.git' in file or '.py' in file or '.pyx' in file:
+            if '.git' in file or '.py' in file or '.pyx' in file or '.msh' in file or '.yaml' in file:
                 continue
             file_path = os.path.join(root, file)
 
