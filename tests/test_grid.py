@@ -18,7 +18,6 @@ linear      = False
 test_dir    = "tests/test-mesh/"
 
 
-
 class TestGrid:
     @pytest.fixture(autouse=True)
     def set_parameters(self, request):
@@ -35,20 +34,31 @@ class TestGrid:
     def compare_and_assert(self, np_grid, grid):
         # Compare each non-function attribute between the two objects
         # Only the ones that are np.ndarray's
-        return 
+        wrong = []
+        
         for attr in dir(np_grid):
             if not attr.startswith("__") and not callable(getattr(np_grid, attr)):
                 np_attr = getattr(np_grid, attr)
                 grid_attr = getattr(grid, attr)
                 
                 if isinstance(np_attr, np.ndarray):
-                    grid_attr = np.sort(np.asarray(grid_attr))
-                    np_attr = np.sort(np_attr)
+                    grid_attr = np.sort(np.asarray(grid_attr).flatten())
+                    np_attr = np.sort(np_attr.flatten())
                 
                 is_ok = np.allclose(np_attr, grid_attr)
                 if not is_ok:
                     print(f"{Fore.RED} NOT OK for {attr} ! {Style.RESET_ALL}")
-                assert is_ok
+                    # Print the indexes of the items that are different
+                    np_flat = np_attr.flatten()
+                    grid_flat = grid_attr.flatten()
+                    for i in range(len(np_flat)):
+                        if np_flat[i] != grid_flat[i]:
+                            print(f"{Fore.RED}np_flat[{i}] = {np_flat[i]} != grid_flat[{i}] = {grid_flat[i]}{Style.RESET_ALL}") 
+                    wrong.append(attr)
+        
+        for attr in wrong:
+            print(f"{Fore.RED}Attribute {attr} is wrong!{Style.RESET_ALL}")
+        assert len(wrong) == 0
                     
     def test_grid_build(self):
         
@@ -59,7 +69,7 @@ class TestGrid:
         print("{}{:<5} {:<15} {:<15} {:<15} {:<5}{}".format(Fore.GREEN, 
                                                             "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Status",
                                                             Style.RESET_ALL))
-        n_tests = 22
+        n_tests = 23
         for case in range(n_tests):
             # Load mesh and prepare data
             nodes_coords, matrix, elem_types = read_msh.read_msh_file(test_dir + f"test{case + 1}.msh")
@@ -94,10 +104,11 @@ class TestGrid:
                                                                           "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Speedup", "Global Speedup", "Status",
                                                                           Style.RESET_ALL))
         print(f"{Style.RESET_ALL}", end="")
+        
         global_avg = 0.
         first_call = True
         suboptimal = []
-        n_tests = 22
+        n_tests = 23
         for case in range(n_tests):
             nodes_coords, matrix, elem_types = read_msh.read_msh_file(test_dir + f"test{case + 1}.msh")
             n_elems           = len(matrix)
@@ -118,6 +129,7 @@ class TestGrid:
                 print(f"{Fore.YELLOW}{rep_str:<5} {temp_str:<15} {round(local_avg/(rep + 1), 2)} {Style.RESET_ALL}", end="\r")
                 
                 start = time.time()
+                
                 grid.build(matrix, elem_types)
 
                 end = time.time()
