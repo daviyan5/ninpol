@@ -44,10 +44,16 @@ ext_data = [
             ]
         )
 ]
+
+package_data = {
+    project_name: ['utils/point_ordering.yaml']
+}
+
 for e in ext_data:
     e.extra_compile_args = ['-O3', '-fopenmp']
     e.extra_link_args    = ['-fopenmp']
     e.define_macros      = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+
 directives = {
     'boundscheck'       : False,
     'wraparound'        : False,
@@ -55,12 +61,14 @@ directives = {
     'initializedcheck'  : False,
     'cdivision'         : True
     }
+
 setup(
     name        =  project_name,
     version     = '0.0.1',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
-
+    packages=find_packages(),
+    package_data=package_data,  # Include data files
     ext_modules = cythonize(ext_data, 
                             language_level      =   '3', 
                             nthreads            =   n_threads, 

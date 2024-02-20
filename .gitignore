@@ -2,3 +2,4 @@ build-helpers/clean-backup/*
 build-helpers/*.txt
 __pycache__/*
 *.pyc
+*.msh
