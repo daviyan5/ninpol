@@ -17,9 +17,18 @@ ext_data = [
             ]
         ),
         Extension(
-            name = f'{project_name}.grid',
+            name = f'{project_name}.mesh.__init__',
             sources = [
-                os.path.join(directory_path, project_name, 'grid.pyx')
+                os.path.join(directory_path, project_name, 'mesh', '__init__.pyx')
+            ],
+            include_dirs = [
+                np.get_include()
+            ]
+        ),
+        Extension(
+            name = f'{project_name}.mesh.grid',
+            sources = [
+                os.path.join(directory_path, project_name, 'mesh', 'grid.pyx')
             ],
             include_dirs = [
                 np.get_include()
@@ -69,7 +78,7 @@ directives = {
 
 setup(
     name        =  project_name,
-    version     = '0.0.1',
+    version     = '0.0.2',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
     packages=find_packages(),
@@ -79,5 +88,6 @@ setup(
                             nthreads            =   n_threads, 
                             annotate            =   True, 
                             compiler_directives =   directives, 
-                            force               =   False)
+                            force               =   False),
+    requires=['numpy', 'cython', 'meshio', 'pyyaml']
 )

@@ -1,2 +1,2 @@
-from .grid import Grid
 from .interpolator import Interpolator
+from .mesh import Grid

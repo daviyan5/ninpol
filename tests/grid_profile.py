@@ -2,7 +2,7 @@
 import pyximport
 pyximport.install()
 
-import ninpol.grid
+import ninpol.mesh
 import numpy as np
 import read_msh
 import pstats, cProfile
@@ -10,7 +10,7 @@ import pstats, cProfile
 msh_file_path = "tests/test-mesh/test22.msh"
 node_coords, matrix, elem_types = read_msh.read_msh_file(msh_file_path)
 
-grid = ninpol.grid.Grid(3, len(matrix), len(node_coords))
+grid = ninpol.mesh.Grid(3, len(matrix), len(node_coords))
 grid.build(matrix, elem_types)
 
 # import os

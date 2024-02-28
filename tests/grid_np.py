@@ -4,46 +4,22 @@ import yaml
 
 
 class Grid:
-    def __init__(self, n_dims, n_elems, n_points):
-        self.n_dims         = n_dims
-        self.n_elems        = n_elems
-        self.n_points       = n_points
-        point_ordering_obj  = yaml.safe_load(open("./ninpol/utils/point_ordering.yaml"))
-        point_ordering = point_ordering_obj['elements']
+    def __init__(self, n_dims, n_elems, n_points, n_faces, nfael, lnofa, lpofa):
+        self.n_dims   = n_dims
 
-        nfael = np.zeros(16, dtype=np.int32)
-        lnofa = np.zeros((16, 6), dtype=np.int32)
-        lpofa = np.ones((16, 6, 4), dtype=np.int32) * -1
+        self.n_elems  = n_elems
+        self.n_faces  = n_faces
+        self.n_points = n_points
 
-        self.n_point_to_type = np.zeros(16, dtype=np.int32)
+        self.nfael    = nfael.copy()
+        self.lnofa    = lnofa.copy()
+        self.lpofa    = lpofa.copy()
 
-        for element_name in point_ordering:
-            element = point_ordering[element_name]
-            element_type = element['element_type']
-            element_n_points = element['number_of_points']
-            self.n_point_to_type[element_n_points] = element_type
-
-            if element_n_points < 3:
-                continue
-
-            nfael[element_type] = len(element['faces'])
-            for i, face in enumerate(element['faces']):
-                lnofa[element_type, i] = len(face)
-                for j, point in enumerate(face):
-                    lpofa[element_type, i, j] = point
-                
-                if len(face) < 4:
-                    lpofa[element_type, i, 3] = -1
-        
-        self.nfael = nfael
-        self.lnofa = lnofa
-        self.lpofa = lpofa
-
-    def build(self, connectivity, elem_types = None):
-        return_values = build(self.n_dims, self.n_points, self.n_elems, self.n_point_to_type, self.nfael, self.lnofa, self.lpofa, connectivity, elem_types)
+    def build(self, connectivity, elem_types, n_points_per_elem):
+        return_values = build(self.n_dims, self.n_points, self.n_elems, self.nfael, self.lnofa, self.lpofa, connectivity, elem_types, n_points_per_elem)
         self.inpoel, self.n_points_per_elem, self.element_types, self.esup, self.esup_ptr, self.psup, self.psup_ptr, self.esuel = return_values
 
-def build(n_dims, n_points, n_elems, n_point_to_type, nfael, lnofa, lpofa, connectivity, elem_types = None):
+def build(n_dims, n_points, n_elems, nfael, lnofa, lpofa, connectivity, elem_types, n_points_per_elem):
     # Check that the connectivity matrix is not None and has the correct shape
     if connectivity is None:
         raise ValueError("The connectivity matrix cannot be None.")
@@ -53,7 +29,7 @@ def build(n_dims, n_points, n_elems, n_point_to_type, nfael, lnofa, lpofa, conne
     inpoel = connectivity
     
     n_points_per_elem = np.array([len(np.argwhere(inpoel[i] != -1)) for i in range(n_elems)], dtype=np.int32)
-    element_types = elem_types if elem_types is not None else n_point_to_type[n_points_per_elem]
+    element_types = elem_types.copy()
 
     esup, esup_ptr = build_esup(n_elems, n_points, inpoel, n_points_per_elem)
     psup, psup_ptr = build_psup(n_points, inpoel, esup, esup_ptr)
