@@ -2,4 +2,7 @@ build-helpers/clean-backup/*
 build-helpers/*.txt
 __pycache__/*
 *.pyc
-*.msh
+tests/test-mesh/*
+build/*
+!.gitkeep
+!*.py
