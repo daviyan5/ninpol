@@ -1,3 +1,1 @@
 pytest
-cython-lint
-pre-commit
