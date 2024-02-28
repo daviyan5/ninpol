@@ -13,13 +13,7 @@ compile:
 	@echo "Done" 
 clean:
 	@echo "Cleaning..."
-	@python3 build-helpers/clean.py
-	@rm -rf build
-	@rm -rf interpolator.egg-info
-	@echo "Done"
-list:
-	@echo "Listing..."
-	@python3 build-helpers/list.py
+	@python3 build/clean.py
 	@echo "Done"
 test:
 	@echo "Testing..."
