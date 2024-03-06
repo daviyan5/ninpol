@@ -9,3 +9,5 @@ build/*
 tmp/*
 .vscode/*
 cython_debug/*
+*.vtk
+*.msh
