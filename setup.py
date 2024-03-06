@@ -8,34 +8,6 @@ n_threads = os.cpu_count()
 project_name = 'ninpol'
 ext_data = [
         Extension(
-            name = f'{project_name}.__init__',
-            sources = [
-                os.path.join(directory_path, project_name, '__init__.pyx')
-            ],
-            include_dirs = [
-                np.get_include()
-            ]
-        ),
-        Extension(
-            name = f'{project_name}.mesh.__init__',
-            sources = [
-                os.path.join(directory_path, project_name, 'mesh', '__init__.pyx')
-            ],
-            include_dirs = [
-                np.get_include()
-            ]
-        ),
-        Extension(
-            name = f'{project_name}.mesh.grid',
-            sources = [
-                os.path.join(directory_path, project_name, 'mesh', 'grid.pyx')
-            ],
-            include_dirs = [
-                np.get_include()
-            ]
-            #,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
-        ),
-        Extension(
             name = f'{project_name}.interpolator',
             sources = [
                 os.path.join(directory_path, project_name, 'interpolator.pyx')
@@ -43,6 +15,16 @@ ext_data = [
             include_dirs = [
                 np.get_include()
             ]
+        ),
+        Extension(
+            name = f'{project_name}.grid',
+            sources = [
+                os.path.join(directory_path, project_name, 'grid.pyx')
+            ],
+            include_dirs = [
+                np.get_include()
+            ]
+            #,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
         ),
         Extension(
             name = f'{project_name}.methods.linear',
@@ -81,13 +63,14 @@ setup(
     version     = '0.0.2',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
-    packages=find_packages(),
-    package_data=package_data,  # Include data files
+    packages    = find_packages(),
+    package_data= package_data,  # Include data files
     ext_modules = cythonize(ext_data, 
                             language_level      =   '3', 
                             nthreads            =   n_threads, 
                             annotate            =   True, 
                             compiler_directives =   directives, 
-                            force               =   False),
+                            force               =   False,
+                            gdb_debug           =   False),
     requires=['numpy', 'cython', 'meshio', 'pyyaml']
 )

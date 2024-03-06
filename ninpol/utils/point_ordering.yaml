@@ -11,16 +11,17 @@ elements:
   line:
     element_type: 1
     number_of_points: 2
+    edges: [[0, 1]]
 
   triangle:
     element_type: 2
     number_of_points: 3
-    faces: [[0, 1], [1, 2], [2, 0]]
+    edges: [[0, 1], [1, 2], [2, 0]]
   
   quad:
     element_type: 3
     number_of_points: 4
-    faces: [[0, 1], [1, 2], [2, 3], [3, 0]]
+    edges: [[0, 1], [1, 2], [2, 3], [3, 0]]
 
   tetra:
     element_type: 4

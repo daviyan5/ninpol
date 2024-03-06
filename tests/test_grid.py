@@ -2,55 +2,32 @@ import pytest
 import numpy as np
 
 import time
+import os
+import sys
 from colorama import Fore, Style
 
 # Test parameters
-n_repeats   = 12
+n_tests     = 3
 linear      = False
 mesh_dir    = "tests/test-mesh/"
 
 
+# Disable
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
+
 class TestGrid:
     @pytest.fixture(autouse=True)
     def set_parameters(self, request):
-        global n_repeats, linear
-        n_repeats   = int(request.config.getoption("--n-repeats", default=n_repeats))
-        linear      = bool(request.config.getoption("--linear", default=linear))
-        
+        pass        
 
     def test_imports(self):
         from ninpol.mesh import Grid
         from ninpol import Interpolator
-
-    
-    def compare_and_assert(self, np_grid, grid):
-        # Compare each non-function attribute between the two objects
-        # Only the ones that are np.ndarray's
-        wrong = []
-        
-        for attr in dir(np_grid):
-            if not attr.startswith("__") and not callable(getattr(np_grid, attr)):
-                np_attr = getattr(np_grid, attr)
-                grid_attr = getattr(grid, attr)
-                
-                if isinstance(np_attr, np.ndarray):
-                    grid_attr = np.sort(np.asarray(grid_attr).flatten())
-                    np_attr = np.sort(np_attr.flatten())
-                
-                is_ok = np.allclose(np_attr, grid_attr)
-                if not is_ok:
-                    print(f"{Fore.RED} NOT OK for {attr} ! {Style.RESET_ALL}")
-                    # Print the indexes of the items that are different
-                    np_flat = np_attr.flatten()
-                    grid_flat = grid_attr.flatten()
-                    for i in range(len(np_flat)):
-                        if np_flat[i] != grid_flat[i]:
-                            print(f"{Fore.RED}np_flat[{i}] = {np_flat[i]} != grid_flat[{i}] = {grid_flat[i]}{Style.RESET_ALL}") 
-                    wrong.append(attr)
-        
-        for attr in wrong:
-            print(f"{Fore.RED}Attribute {attr} is wrong!{Style.RESET_ALL}")
-        assert len(wrong) == 0
                     
     def test_grid_build(self):
         
@@ -58,118 +35,81 @@ class TestGrid:
         Tests whether the grid is built correctly.
         """
         import ninpol
-        import grid_np
         import meshio
         import os
 
-        print(f"\n{Fore.CYAN}Testing correctness ========================================{Style.RESET_ALL}")
-        print("{}{:<5} {:<15} {:<15} {:<15} {:<5}{}".format(Fore.GREEN, 
-                                                            "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Status",
-                                                            Style.RESET_ALL))
-        n_tests = 3
-        i = ninpol.Interpolator()
-
         # Iterate over n_tests files of mesh_dir
         files = sorted(os.listdir(mesh_dir))[1:]
+        interpolador = ninpol.Interpolator()
 
         for case in range(n_tests):
+            blockPrint()
+            interpolador.load_mesh(mesh_dir + files[case])
+            enablePrint()
+
             
-            zfill_len = int(np.ceil(np.log10(n_tests)))
-            index_str = "[" + str(case).zfill(zfill_len) + "]"
-
-            temp_str = "Building grid..."
-            print(f"{Fore.YELLOW}{index_str:<5} {temp_str:<15} {Style.RESET_ALL}", end="\r")
-            msh = meshio.read(mesh_dir + files[case])
-            args = i.process_mesh(msh)
-            print(args)
-            (dim, n_elems, n_points, n_faces, 
-             nfael, lnofa, lpofa, 
-             matrix, elem_types, n_points_per_elem) = args
-
-            np_grid = grid_np.Grid(dim, n_elems, n_points, n_faces, nfael, lnofa, lpofa)
-            np_grid.build(matrix, elem_types, n_points_per_elem)
-
-            #grid = ninpol.grid.Grid(3, n_elems, n_points)
-            #grid.build(matrix, elem_types)
-
-            #self.compare_and_assert(np_grid, grid)
-
-            #s\print(f"{index_str:<5} {n_elems:<15} {n_points_per_elem:<15} {n_points:<15}", end="")
-            status = "OK"
-            print(f" {Fore.GREEN}{status:<5}{Style.RESET_ALL}")
-        print(f"{Fore.CYAN}============================================================={Style.RESET_ALL}")
     
     def test_grid_speed(self):
         """
         Tests wether the grid is built efficiently.
         """
-        print(f"\n{Fore.CYAN}Testing speed ------------------------------------------------------------------------------{Style.RESET_ALL}")
-        print(f"{Fore.LIGHTWHITE_EX}", end="")
-        print("{}{:<5} {:<15} {:<15} {:<15} {:<15} {:<15} {:<5}{}".format(Fore.GREEN,
-                                                                          "Idx", "Nº of Elements", "Points/Element", "Nº of Points", "Speedup", "Global Speedup", "Status",
-                                                                          Style.RESET_ALL))
-        print(f"{Style.RESET_ALL}", end="")
-        return 
-        global_avg = 0.
-        first_call = True
-        suboptimal = []
-        n_tests = 23
+        import ninpol
+        import meshio
+        import os
+        # Iterate over n_tests files of mesh_dir
+        files = sorted(os.listdir(mesh_dir))[1:]
+        interpolador = ninpol.Interpolator()
+        print("\n==============================================\n", end="")
         for case in range(n_tests):
             
-
+            start_time = time.time()
+            blockPrint()
+            msh = meshio.read(mesh_dir + files[case])
+            enablePrint()
+            end_time = time.time()
+            time_to_load = end_time - start_time
             
-            if first_call:
-                # np_grid = grid_np.Grid(3, n_elems, n_points)
-                # np_grid.build(matrix, elem_types)
-                first_call = False
-            # grid = ninpol.grid.Grid(3, n_elems, n_points)
-            local_avg = 0.
-            for rep in range(n_repeats):
-                zfill_len = int(np.ceil(np.log10(n_tests)))
-                rep_str = "["+str(rep).zfill(zfill_len)+"]"
-                temp_str = "Cur Speedup:"
-                print(f"{Fore.YELLOW}{rep_str:<5} {temp_str:<15} {round(local_avg/(rep + 1), 2)} {Style.RESET_ALL}", end="\r")
-                
-                start = time.time()
-                
-                # grid.build(matrix, elem_types)
+            start_time = time.time()
+            args = interpolador.process_mesh(msh)
+            end_time = time.time()
 
-                end = time.time()
+            time_to_process = end_time - start_time
+            
+            start_time = time.time()
+            grid_obj = ninpol.Grid(args[0], 
+                                   args[1], args[2], args[3], 
+                                   args[4], args[5], args[6],
+                                   args[7], args[8])
+            grid_obj.build(args[9], args[10], args[11])
+            end_time = time.time()
 
-                elapsed_cpnp = end - start
-                
-                start = time.time()
+            time_to_build = end_time - start_time
 
-                # np_grid = grid_np.Grid(3, n_elems, n_points)
-                # np_grid.build(matrix, elem_types)
+            start_time = time.time()
+            blockPrint()
+            interpolador.load_mesh(mesh_dir + files[case])
+            enablePrint()
+            end_time = time.time()
 
-                end = time.time()
+            time_to_load_process_build = end_time - start_time
+            color = [
+                Fore.GREEN, 
+                Fore.GREEN,
+                Fore.GREEN
+            ]
+            mn = min(time_to_load, time_to_process, time_to_build)
+            mx = max(time_to_load, time_to_process, time_to_build)
+            
+            color[0] = Fore.GREEN if time_to_load == mn else Fore.RED if time_to_load == mx else Fore.YELLOW
+            color[1] = Fore.GREEN if time_to_process == mn else Fore.RED if time_to_process == mx else Fore.YELLOW
+            color[2] = Fore.GREEN if time_to_build == mn else Fore.RED if time_to_build == mx else Fore.YELLOW
 
-                elapsed_pynp = end - start
-
-                local_avg +=  elapsed_pynp / elapsed_cpnp
-
-            local_speedup = local_avg / n_repeats
-            global_avg += local_speedup
-            global_speedup = global_avg / (case + 1)
-
-            local_speedup = np.round(local_speedup, 2)
-            global_speedup = np.round(global_speedup, 2)
-
-            zfill_len = int(np.ceil(np.log10(n_tests)))
-            index_str = "["+str(case).zfill(zfill_len)+"]"
-            # print(f"{index_str:<5} {n_elems:<15} {n_points_per_elem:<15} {n_points:<15} {local_speedup:<15} {global_speedup:<15}", end="")
-
-            # self.compare_and_assert(np_grid, grid)
-
-            status = "FAST!" if local_speedup > 10. else "OK" if local_speedup > 5. else "SLOW" if local_speedup > 1. else "SLOW!!"
-            print(f" {Fore.GREEN if local_speedup > 10. else Fore.LIGHTGREEN_EX if local_speedup > 5. else Fore.YELLOW if local_speedup > 1. else Fore.RED}{status:<5}{Style.RESET_ALL}")
-
-            if local_speedup <= 2.:
-                suboptimal.append(case)
-
-
-        print(f"{Fore.CYAN}-------------------------------------------------------------------------------------------{Style.RESET_ALL}")
+            print(f"{'Mesh:':<35} {Fore.LIGHTGREEN_EX}{files[case]}{Style.RESET_ALL}")
+            print(f"{'Time to load mesh:':<35} {color[0]}{time_to_load:.2e} s{Style.RESET_ALL}")
+            print(f"{'Time to process mesh:':<35} {color[1]}{time_to_process:.2e} s{Style.RESET_ALL}")
+            print(f"{'Time to build grid:':<35} {color[2]}{time_to_build:.2e} s{Style.RESET_ALL}")
+            print(f"{'Time to load, process and build:':<35} {time_to_load_process_build:.2e} s")
+            print("==============================================")
 
                     
             

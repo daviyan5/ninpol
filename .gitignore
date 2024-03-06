@@ -6,3 +6,5 @@ tests/test-mesh/*
 build/*
 !.gitkeep
 !*.py
+tmp/*
+.vscode/*
