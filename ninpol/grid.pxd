@@ -1,7 +1,6 @@
 """
 This file contains the "Grid" class definition, for mesh manipulation. 
 """
-
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
@@ -10,70 +9,79 @@ cnp.import_array()                  # Needed to use NumPy C API
 ctypedef cnp.int64_t DTYPE_I_t
 ctypedef cnp.float64_t DTYPE_F_t
 
+
 cdef class Grid:
     """
-        Stores and manipulates the mesh data.
-        This is a class intended to be used only from Cython, specifically from the 'interpolator.pyx' file.
+    Stores and manipulates the mesh data.
+    This is a class intended to be used only from Cython, specifically from the 'interpolator.pyx' file.
 
-        Attributes
-        ----------
-        n_dims : int
-            Number of dimensions
-        n_elems : int
-            Number of elements
-        n_points : int
-            Number of points (vertices) that compose the mesh
-        n_faces: int
-            Number of faces that compose the mesh
-        n_points_per_elem : numpy.ndarray
-            Number of points per element
-        n_faces_per_elem : numpy.ndarray
-            Number of faces per element
-        n_points_per_face : numpy.ndarray
-            Number of points per face
+    Attributes
+    ----------
+    n_dims : int
+        Number of dimensions
+    n_elems : int
+        Number of elements
+    n_points : int
+        Number of points (vertices) that compose the mesh
+    n_faces: int
+        Number of faces that compose the mesh
+    n_points_per_elem : numpy.ndarray
+        Number of points per element
 
-        element_types : numpy.ndarray
-            Array containing the type of each element. The type of the i-th element is given by element_types[i].
-            The description relating the geometry and the element type is given by the 'point_ordering.yaml' file.
+    element_types : numpy.ndarray
+        Array containing the type of each element. The type of the i-th element is given by element_types[i].
+        The description relating the geometry and the element type is given by the 'point_ordering.yaml' file.
 
-        inpoel: numpy.ndarray
-            Elements connectivity, passed by the user
+    inpoel: numpy.ndarray
+        Elements connectivity, passed by the user
 
-        esup : numpy.ndarray
-            Elements surrounding points connectivity
-        esup_ptr : numpy.ndarray
-            Elements surrounding points pointer. 
-            i.e: The elements surrounding point i are in esup[esup_ptr[i]:esup_ptr[i+1]]
+    esup : numpy.ndarray
+        Elements surrounding points connectivity
+    esup_ptr : numpy.ndarray
+        Elements surrounding points pointer. 
+        i.e: The elements surrounding point i are in esup[esup_ptr[i]:esup_ptr[i+1]]
 
-        psup : numpy.ndarray
-            Points surrounding points connectivity
-        psup_ptr : numpy.ndarray
-            Points surrounding points pointer. 
-            i.e: The points surrounding point i are in psup[psup_ptr[i]:psup_ptr[i+1]]
+    psup : numpy.ndarray
+        Points surrounding points connectivity
+    psup_ptr : numpy.ndarray
+        Points surrounding points pointer. 
+        i.e: The points surrounding point i are in psup[psup_ptr[i]:psup_ptr[i+1]]
 
-        nfael : numpy.ndarray
-            Number of faces per element type
-            i.e : The number of faces of a tetrahedron is nfael[4]
+    nfael : numpy.ndarray
+        Number of faces per element type
+        i.e : The number of faces of a tetrahedron is nfael[4]
 
-        lnofa : numpy.ndarray
-            Number of points per face per element type
-            i.e : The number of points in the second face of a tetrahedron is lnofa[4, 1]
+    lnofa : numpy.ndarray
+        Number of points per face per element type
+        i.e : The number of points in the second face of a tetrahedron is lnofa[4, 1]
 
-        lpofa: numpy.ndarray
-            Description of the faces of each element type
-            i.e : The faces of a tetrahedron are in lpofa[4, :, :]
+    lpofa: numpy.ndarray
+        Description of the faces of each element type
+        i.e : The faces of a tetrahedron are in lpofa[4, :, :]
 
-        esuel : numpy.ndarray
-            Elements surrounding elements connectivity matrix of shape (n_elems, n_faces_per_elem)
-            i.e : The elements surrounding element i are in esuel[i, :])
+    infael: numpy.ndarray
+        Faces that compose each element
+        i.e : The faces that compose element i are in infael[i, :])
         
-        inpoed : numpy.ndarray
-            Points that compose each edge
-            i.e : The points that compose edge i are in inpoed[i, :])
-        
-        ledel : numpy.ndarray
-            Edges that compose each element
-            i.e : The edges that compose element i are in edsuel[i, :])
+    esufa: numpy.ndarray
+        Elements surrounding faces
+        i.e : The elements surrounding face i are in esufa[i, :])
+
+    esuel : numpy.ndarray
+        Elements surrounding elements 
+        i.e : The elements surrounding element i are in esuel[i, :])
+    
+    nedel: numpy.ndarray
+        Number of edges per element type
+        i.e : The number of edges of element of type i is nedel[i]
+    
+    lpoed : numpy.ndarray
+        Description of the edges of each element type
+        i.e : The edges of an element of type i are in lpoed[i, :, :]
+
+    inedel : numpy.ndarray
+        Edges that compose each element
+        i.e : The edges that compose element i are in edsuel[i, :])
 
     """
     cdef readonly int n_dims
@@ -81,11 +89,14 @@ cdef class Grid:
     cdef readonly int n_elems
     cdef readonly int n_points
     cdef readonly int n_faces
+
+    cdef readonly int are_elements_loaded
+    cdef readonly int are_coords_loaded
+
+    cdef readonly DTYPE_F_t[:, ::1] point_coords
+    cdef readonly DTYPE_F_t[:, ::1] centroids
     
-    cdef readonly DTYPE_I_t[::1] n_point_to_type
     cdef readonly DTYPE_I_t[::1] n_points_per_elem
-    cdef readonly DTYPE_I_t[::1] n_faces_per_elem
-    cdef readonly DTYPE_I_t[::1] n_points_per_face 
 
     cdef readonly DTYPE_I_t[::1] element_types
 
@@ -101,10 +112,15 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[:, ::1] lnofa
     cdef readonly DTYPE_I_t[:, :, ::1] lpofa
 
+    cdef readonly DTYPE_I_t[:, ::1] infael
+    cdef readonly DTYPE_I_t[:, ::1] esufa
+    
     cdef readonly DTYPE_I_t[:, ::1] esuel
 
-    cdef readonly DTYPE_I_t[:, ::1] inpoed
-    cdef readonly DTYPE_I_t[:, ::1] ledel
+    cdef readonly DTYPE_I_t[::1] nedel
+    cdef readonly DTYPE_I_t[:, :, ::1] lpoed
+
+    cdef readonly DTYPE_I_t[:, ::1] inedel
     
 
     """
@@ -144,7 +160,7 @@ cdef class Grid:
             An Introduction Based on Finite Element Methods (2nd ed.). ISBN: 978-0-470-51907-3.
 
     """ 
-    cpdef void build(self, DTYPE_I_t[:, ::1] connectivity, DTYPE_I_t[::1] element_types = *)
+    cpdef void build(self, const DTYPE_I_t[:, ::1] connectivity, const DTYPE_I_t[::1] element_types, const DTYPE_I_t[::1] n_points_per_elem)
 
     """
         Builds the elements surrounding each point (esup) array.
@@ -164,6 +180,10 @@ cdef class Grid:
     """
     cdef void build_psup(self)
 
+    cdef void build_infael(self)
+
+    cdef void build_esufa(self)
+
     """
         Builds the elements surrounding each element (esuel) array. 
         Iterates over elements faces and checks if the face is shared with another element, by checking every element that surrounds a point of the face.
@@ -175,7 +195,8 @@ cdef class Grid:
     """
     cdef void build_esuel(self)
 
-    cdef void build_inpoed(self)
+    cdef void build_inedel(self)
     
-    cdef void build_ledel(self)
-    
+    cdef void load_point_coords(self, DTYPE_F_t[:, ::1] point_coords)
+
+    cdef void calculate_cells_centroids(self)

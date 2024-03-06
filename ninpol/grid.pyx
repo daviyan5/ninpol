@@ -1,18 +1,14 @@
 """
 This file contains the "Grid" class implementation
 """
-
 import numpy as np
-from libc.stdio cimport printf
-from cython.parallel cimport parallel, prange
-cimport openmp
 
-
-DTYPE_I = np.int64
-DTYPE_F = np.float64
 
 cdef class Grid:
-    def __cinit__(self, DTYPE_I_t n_dims, DTYPE_I_t n_elems, DTYPE_I_t n_points):
+    def __cinit__(self, DTYPE_I_t n_dims, 
+                        DTYPE_I_t n_elems, DTYPE_I_t n_points, DTYPE_I_t n_faces, 
+                        DTYPE_I_t[::1] nfael, DTYPE_I_t[:, ::1] lnofa, DTYPE_I_t[:, :, ::1] lpofa, 
+                        DTYPE_I_t[::1] nedel, DTYPE_I_t[:, :, ::1] lpoed):
         """
             Initializes the grid.
 
@@ -24,81 +20,51 @@ cdef class Grid:
                     Number of elements in the mesh
                 n_points : int
                     Number of points (vertices) in the mesh
-        """
-        import yaml
-        import os
-        cdef:
-            str script_dir = os.path.dirname(os.path.abspath(__file__))
-            str point_ordering_path = os.path.join(script_dir, "utils/point_ordering.yaml")
-            dict point_ordering_obj, point_ordering
-
-        self.n_dims             = n_dims
-        self.n_elems            = n_elems
-        self.n_points           = n_points
-        point_ordering_obj      = yaml.load(open(point_ordering_path), Loader=yaml.FullLoader)
-        point_ordering          = point_ordering_obj['elements']
-
-        cdef:
-            DTYPE_I_t[::1] nfael = np.zeros(16, dtype=DTYPE_I)
-            DTYPE_I_t[:, ::1] lnofa = np.zeros((16, 6), dtype=DTYPE_I)
-            DTYPE_I_t[:, :, ::1] lpofa = np.ones((16, 6, 4), dtype=DTYPE_I) * -1
-            int element_type, element_n_points
-            int i, j
-            list face
-            int point
-            str element_name
-            dict element
-        
-        self.n_point_to_type = np.zeros(16, dtype=DTYPE_I)
-
-        for element_name in point_ordering:
-            element = point_ordering[element_name]
-            element_type = element['element_type']
-            element_n_points = element['number_of_points']
-            self.n_point_to_type[element_n_points] = element_type
-
-            if element_n_points < 3:
-                continue
-
-            nfael[element_type] = len(element['faces'])
-            for i, face in enumerate(element['faces']):
-                lnofa[element_type, i] = len(face)
-                for j, point in enumerate(face):
-                    lpofa[element_type, i, j] = point
+                n_faces : int
+                    Number of faces in the mesh
+                nfael : array_like
+                    Number of faces per element
+                lnofa : array_like
+                    Number of points per face
+                lpofa : array_like
+                    Points per face
                 
-                if len(face) < 4:
-                    lpofa[element_type, i, 3] = -1
+        """
+        self.n_dims   = n_dims
+
+        self.n_elems  = n_elems
+        self.n_faces  = n_faces
+        self.n_points = n_points
+
+        self.nfael    = nfael.copy()
+        self.lnofa    = lnofa.copy()
+        self.lpofa    = lpofa.copy()
+
+        self.nedel    = nedel.copy()
+        self.lpoed    = lpoed.copy()
+
+        self.are_elements_loaded = False
+        self.are_coords_loaded = False
         
-        self.nfael = nfael
-        self.lnofa = lnofa
-        self.lpofa = lpofa
 
 
-    cpdef void build(self, DTYPE_I_t[:, ::1] connectivity, DTYPE_I_t[::1] element_types = None):
+    cpdef void build(self, const DTYPE_I_t[:, ::1] connectivity, const DTYPE_I_t[::1] element_types, const DTYPE_I_t[::1] n_points_per_elem):
 
         # Check that the connectivity matrix is not None and has the correct shape
         if connectivity is None:
             raise ValueError("The connectivity matrix cannot be None.")
         if connectivity.shape[0] != self.n_elems:
-
             raise ValueError("The number of rows in the connectivity matrix must be equal to the number of elements.")
         
         self.inpoel = connectivity.copy()
+        self.element_types = element_types.copy()
+        self.n_points_per_elem = n_points_per_elem.copy()
         
+        self.are_elements_loaded = True
+
         # Calculate number of points per element, defines number of faces per element
         cdef:
             int i, j
-
-        self.n_points_per_elem = np.zeros(self.n_elems, dtype=DTYPE_I)
-        self.element_types = element_types if element_types is not None else np.zeros(self.n_elems, dtype=DTYPE_I)
-
-        for i in range(self.n_elems):
-            for j in range(self.inpoel.shape[1]):
-                if self.inpoel[i, j] == -1:
-                    break
-                self.n_points_per_elem[i] += 1
-            if element_types is None:
-                self.element_types[i] = self.n_point_to_type[self.n_points_per_elem[i]]
         
         # Calculate the elements surrounding each point
         self.build_esup()
@@ -106,13 +72,17 @@ cdef class Grid:
         # Calculate the points surrounding each point
         self.build_psup()
 
+        # Calculate the faces composing each element
+        self.build_infael()
+        
+        # Calculate the elements surrounding each face
+        self.build_esufa()
+
         # Calculate the elements surrounding each element
         self.build_esuel()
 
-        # Calculate the points that form each edge
-        if self.n_dims == 3:
-            self.build_inpoed()
-            self.build_ledel()
+        # Calculate the edges surrounding each element
+        self.build_inedel()
 
     cdef void build_esup(self):
         
@@ -120,7 +90,7 @@ cdef class Grid:
             int i, j
 
         # Reshape the arrays
-        self.esup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
+        self.esup_ptr = np.zeros(self.n_points+1, dtype=np.int64)
 
         # Count the number of elements surrounding each point    
         for i in range(self.n_elems):
@@ -132,7 +102,7 @@ cdef class Grid:
             self.esup_ptr[i + 1] += self.esup_ptr[i]
 
         # Fill the esup array
-        self.esup = np.zeros(self.esup_ptr[self.n_points], dtype=DTYPE_I)
+        self.esup = np.zeros(self.esup_ptr[self.n_points], dtype=np.int64)
         for i in range(self.n_elems):
             for j in range(self.n_points_per_elem[i]):
                 self.esup[self.esup_ptr[self.inpoel[i, j]]] = i
@@ -147,13 +117,13 @@ cdef class Grid:
         cdef:
             int i, j, k
             int stor_ptr = 0, point_idx
-            DTYPE_I_t[::1] temp_psup = np.ones(self.n_points, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] temp_psup = np.ones(self.n_points, dtype=np.int64) * -1
         
-        self.psup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
+        self.psup_ptr = np.zeros(self.n_points+1, dtype=np.int64)
         self.psup_ptr[0] = 0
     
         # Upper bound for the number of points surrounding each point, pehaps this can be improved
-        self.psup = np.zeros((self.esup_ptr[self.n_points] * (7)), dtype=DTYPE_I) 
+        self.psup = np.zeros((self.esup_ptr[self.n_points] * (7)), dtype=np.int64) 
 
         # Calculate the points surrounding each point, using temp_psup to avoid duplicates
         for i in range(self.n_points):
@@ -169,6 +139,12 @@ cdef class Grid:
 
         # Resize the psup array to remove padding
         self.psup = self.psup[:stor_ptr]
+    
+    cdef void build_infael(self):
+        pass
+    
+    cdef void build_esufa(self):
+        pass
 
     cdef void build_esuel(self):
         
@@ -178,11 +154,11 @@ cdef class Grid:
             int ielem, jelem
             int ielem_type, jelem_type
 
-            DTYPE_I_t[::1] ielem_face = np.zeros(4, dtype=DTYPE_I)
-            DTYPE_I_t[::1] jelem_face = np.zeros(4, dtype=DTYPE_I)
+            DTYPE_I_t[::1] ielem_face = np.zeros(4, dtype=np.int64)
+            DTYPE_I_t[::1] jelem_face = np.zeros(4, dtype=np.int64)
 
-            DTYPE_I_t[::1] ielem_face_index = np.zeros(4, dtype=DTYPE_I)
-            DTYPE_I_t[::1] jelem_face_index = np.zeros(4, dtype=DTYPE_I)
+            DTYPE_I_t[::1] ielem_face_index = np.zeros(4, dtype=np.int64)
+            DTYPE_I_t[::1] jelem_face_index = np.zeros(4, dtype=np.int64)
 
             int point, kpoint
             int num_elems, num_elems_min
@@ -191,7 +167,7 @@ cdef class Grid:
             int is_equal 
             
 
-        self.esuel = np.ones((self.n_elems, 6), dtype=DTYPE_I) * -1
+        self.esuel = np.ones((self.n_elems, 6), dtype=np.int64) * -1
 
         # For each element
         for ielem in range(self.n_elems):
@@ -258,17 +234,40 @@ cdef class Grid:
 
                             if found_elem:
                                 break
-
+                                
                     if found_elem:
                         break
-
-        
-                
-               
-    cdef void build_inpoed(self):
-        pass
-    cdef void build_ledel(self):
+    
+    cdef void build_inedel(self):
         pass
     
+    cdef void load_point_coords(self, DTYPE_F_t[:, ::1] coords):
+        self.point_coords = coords.copy()
+        self.are_coords_loaded = True
+
+    cdef void calculate_cells_centroids(self):
+        if self.are_elements_loaded == False:
+            raise ValueError("The element types have not been set.")
+        if self.are_coords_loaded == False:
+            raise ValueError("The point coordinates have not been set.")
+
+        # For each element type, calculate the centroid
+        # OBS: The right way to do this is to:
+        #           1. Triangulate each face
+        #           2. Calculate the contribuitions of each face to the volume and centroid
+        # This can be done by using an array 'triangles' for each face, such that triangles[i] = [[a1, b1, c1], [a2, b2, c2], ...]
+        # that triangulate that face. If the face is already a triangle, then triangles[i] = [[a, b, c]]
+        # Then, using esufa, we can calculate the volume and centroid of each element
+
+        # However, for now, we will use only the average of the points
+        cdef:
+            int i, j, k
+
+        self.centroids = np.zeros((self.n_elems, self.n_dims), dtype=np.float64)
+
+        for i in range(self.n_elems):
+            for j in range(self.n_points_per_elem[i]):
+                for k in range(self.n_dims):
+                    self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k]
 
         
