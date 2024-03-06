@@ -8,3 +8,4 @@ build/*
 !*.py
 tmp/*
 .vscode/*
+cython_debug/*
