@@ -9,27 +9,41 @@ cdef DTYPE_F_t[::1] distance_inverse(int dim, const DTYPE_F_t[:, ::1] target, co
     
     cdef int n_target = target.shape[0]
 
+
     cdef DTYPE_F_t[::1] result = np.zeros(n_target * weights_shape, dtype=np.float64)
     cdef:
         int i, j, k
         int source_idx, dest_idx
+        int zero_found
         DTYPE_F_t distance = 0.0, total_distance = 0.0
         int use_threads = n_target > 1000
     
     omp_set_num_threads(8)
     for dest_idx in prange(n_target, nogil=True, schedule='static'):
         total_distance = 0
+        zero_found = False
+
         for j in range(connectivity_ptr[dest_idx], connectivity_ptr[dest_idx+1]):
             source_idx = connectivity[j]
             distance = 0.0
             for k in range(dim):
-                distance += (target[dest_idx, k] - source[source_idx, k])**2
+                distance = distance + (target[dest_idx, k] - source[source_idx, k])**2
+            
+            if distance < 1e-12:
+                zero_found = True
+                for k in range(weights_shape):
+                    result[dest_idx * weights_shape + k] = weights[source_idx * weights_shape + k]
+                break
+            
             for k in range(weights_shape):
                 result[dest_idx * weights_shape + k] += weights[source_idx * weights_shape + k] * (1 / distance)
-            total_distance += 1 / distance
+            total_distance = total_distance + 1 / distance
 
-        for k in range(weights_shape):
-            result[dest_idx * weights_shape + k] /= total_distance
+        if not zero_found:
+            for k in range(weights_shape):
+                result[dest_idx * weights_shape + k] /= total_distance
+        else:
+            zero_found = False
         
     
     return result
