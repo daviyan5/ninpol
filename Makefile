@@ -16,6 +16,9 @@ clean:
 	@python3 build/clean.py
 	@echo "Done"
 test:
+	@echo "Creating vtk files..."
+	@python3 tests/utils/create_vtk.py
+
 	@echo "Testing..."
 	@pytest -s
 

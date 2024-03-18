@@ -1,0 +1,50 @@
+files:
+  box1.vtk:
+    inv_dist:
+      error_linear: 0.14798392782465786
+      error_quadratic: 0.12898283037521804
+  box2.vtk:
+    inv_dist:
+      error_linear: 0.014161884352951695
+      error_quadratic: 0.007673707233124075
+  box3.vtk:
+    inv_dist:
+      error_linear: 0.013509192585526169
+      error_quadratic: 0.004521644732554333
+  hex2.vtk:
+    inv_dist:
+      error_linear: 0.003294606359654772
+      error_quadratic: 0.006853177902189175
+  hex3.vtk:
+    inv_dist:
+      error_linear: 0.001124859342464936
+      error_quadratic: 0.0023117996836608907
+  prism1.vtk:
+    inv_dist:
+      error_linear: 0.011011994425455222
+      error_quadratic: 0.021932786812370236
+  prism2.vtk:
+    inv_dist:
+      error_linear: 0.0037268985388195994
+      error_quadratic: 0.007590513122688639
+  prism3.vtk:
+    inv_dist:
+      error_linear: 0.001958165229285505
+      error_quadratic: 0.0040446000045978
+  spheres.vtk:
+    inv_dist:
+      error_linear: 0.011330873933032856
+      error_quadratic: 0.01532377503467925
+  tetra1.vtk:
+    inv_dist:
+      error_linear: 0.02367378752215252
+      error_quadratic: 0.04265479098453472
+  tetra2.vtk:
+    inv_dist:
+      error_linear: 0.017597769444940157
+      error_quadratic: 0.03439626704612489
+  tetra3.vtk:
+    inv_dist:
+      error_linear: 0.012742543323952922
+      error_quadratic: 0.024617797171962285
+n_files: 12
