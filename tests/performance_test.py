@@ -8,10 +8,12 @@ import sys
 import yaml
 from colorama import Fore, Style
 import memory_profiler
+from results import test_graphs
 
 # Test parameters
 mesh_dir    = "tests/utils/altered/"
-n_tests     = 10
+n_number    = 1
+n_repeats   = 1
 
 # Disable
 def blockPrint():
@@ -37,6 +39,9 @@ class TestGrid:
 
         # Iterate over n_files files of mesh_dir
         files   = sorted(os.listdir(mesh_dir))
+        # Remove .gitkeep
+        if ".gitkeep" in files:
+            files.remove(".gitkeep")
         n_files = len(files)
         
         interpolador = ninpol.Interpolator()
@@ -79,6 +84,9 @@ class TestGrid:
             return average
         
         files   = sorted(os.listdir(mesh_dir))
+        # Remove .gitkeep
+        if ".gitkeep" in files:
+            files.remove(".gitkeep")
         n_files = len(files)
         
         print("\n==============================================\n")
@@ -87,7 +95,7 @@ class TestGrid:
         result_dict = {}
         result_dict["n_files"] = n_files
         result_dict["files"] = {}
-
+        
         for case in range(n_files):
             interpolador = ninpol.Interpolator()
             filename = files[case]
@@ -96,12 +104,12 @@ class TestGrid:
             filesize_b = os.path.getsize(os.path.join(mesh_dir, filename)) / (1024 * 1024)
             filesize = np.round(filesize_b, 3)
 
-            time_to_load = min(timeit.repeat(lambda: load_mesh(mesh_dir, filename), number=5))
+            time_to_load = min(timeit.repeat(lambda: load_mesh(mesh_dir, filename), number=n_number, repeat=n_repeats))
             memory_to_load = average_memory((load_mesh, (mesh_dir, filename)))
 
             msh = meshio.read(os.path.join(mesh_dir, filename))
 
-            time_to_process = min(timeit.repeat(lambda: process_mesh(interpolador, msh), number=5))
+            time_to_process = min(timeit.repeat(lambda: process_mesh(interpolador, msh), number=n_number, repeat=n_repeats))
             memory_to_process = average_memory((process_mesh, (interpolador, msh)))
             
 
@@ -109,16 +117,16 @@ class TestGrid:
             grid_obj = ninpol.grid.Grid(*args[:9])
             grid_obj.build(*args[9:])
 
-            time_to_build = min(timeit.repeat(lambda: build_grid(interpolador, args), number=5))
+            time_to_build = min(timeit.repeat(lambda: build_grid(interpolador, args), number=n_number, repeat=n_repeats))
             memory_to_build = average_memory((build_grid, (interpolador, args)))
 
-            time_to_load_process_build = min(timeit.repeat(lambda: load_process_build(interpolador, mesh_dir, filename), number=5))
+            time_to_load_process_build = min(timeit.repeat(lambda: load_process_build(interpolador, mesh_dir, filename), number=n_number, repeat=n_repeats))
             memory_to_load_process_build = average_memory((load_process_build, (interpolador, mesh_dir, filename)))
 
             points = np.arange(grid_obj.n_points)
             n_points = grid_obj.n_points
 
-            time_to_interpolate = min(timeit.repeat(lambda: interpolate(interpolador, points), number=5))
+            time_to_interpolate = min(timeit.repeat(lambda: interpolate(interpolador, points), number=n_number, repeat=n_repeats))
             memory_to_interpolate = average_memory((interpolate, (interpolador, points)))
 
             
@@ -184,9 +192,10 @@ class TestGrid:
 
             print("==============================================")
 
-        with open("tests/results/grid_performance.yaml", "w") as f:
+        with open("tests/results/performance_test.yaml", "w") as f:
             yaml.dump(result_dict, f)
-                        
+        
+        test_graphs.graph_performance()
                 
 
 

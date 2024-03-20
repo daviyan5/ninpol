@@ -4,8 +4,9 @@ import numpy as np
 import sys
 import os
 import memory_profiler
-# add this file directory to the path at __file__
-sys.path.append(os.path.dirname(__file__))
+import analytical
+
+
 mesh_dir = "./altered/"
 
 def load_mesh(mesh_dir, filename):
@@ -22,12 +23,16 @@ def load_process_build(interpolador, mesh_dir, filename):
     interpolador.load_mesh(os.path.join(mesh_dir, filename))
 
 def interpolate(interpolador, points):
-    interpolador.interpolate(points, "linear", "inv_dist", "ctp")
+    interpolador.interpolate(points, "quarter_five_spot", "inv_dist", "ctp")
 
-mesh_file = "./altered/box1.vtk"
+def l2norm_relative(measure, reference):
+    sqr_sum = np.sum(reference ** 2)
+    return np.sqrt(np.sum((measure - reference) ** 2) / sqr_sum)
+
+mesh_file = os.path.join(os.path.dirname(__file__), "altered", "box4.vtk")
 msh = meshio.read(mesh_file)
 interpolador = ninpol.Interpolator()
 interpolador.load_mesh(mesh_file)
 point_coords = np.asarray(interpolador.grid_obj.point_coords)
 points = np.arange(point_coords.shape[0])
-measure = np.asarray(interpolador.interpolate(points, 'linear', 'inv_dist', "ctp"))
+measure = np.asarray(interpolador.interpolate(points, 'quarter_five_spot', 'inv_dist', "ctp"))

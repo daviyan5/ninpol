@@ -3,6 +3,9 @@ This file contains the "Grid" class implementation
 """
 import numpy as np
 
+from cython.parallel import prange
+from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
+
 
 cdef class Grid:
     def __cinit__(self, DTYPE_I_t n_dims, 
@@ -264,10 +267,16 @@ cdef class Grid:
             int i, j, k
 
         self.centroids = np.zeros((self.n_elems, self.n_dims), dtype=np.float64)
+        
+        cdef:
+            int use_threads = self.n_elems > 1000
+            float machine_epsilon = 10 ** int(np.log10(np.finfo(np.float64).eps))
 
-        for i in range(self.n_elems):
+        omp_set_num_threads(8 if use_threads else 1)
+
+        for i in prange(self.n_elems, nogil=True, schedule='static', num_threads=8 if use_threads else 1):
             for j in range(self.n_points_per_elem[i]):
                 for k in range(self.n_dims):
-                    self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k]
+                    self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k] / self.n_points_per_elem[i]
 
         

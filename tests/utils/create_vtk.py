@@ -6,11 +6,11 @@ import analytical
 # Move current path to the directory of this file
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-def calculate_properties(centroids):
+def calculate_properties(centroids, is_box=False):
     # Calculate properties for each centroid using the analytical package
-    linear     = analytical.linear(centroids)
+    linear              = analytical.linear(centroids)
     quadratic           = analytical.quadratic(centroids)
-    quarter_five_spot   = analytical.quarter_five_spot(centroids)
+    quarter_five_spot   = analytical.quarter_five_spot(centroids, is_box)
 
     return linear, quadratic, quarter_five_spot
 
@@ -40,10 +40,11 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
         connectivity = cell_type.data
 
         centroids = np.mean(mesh.points[connectivity], axis=1)
-        lp, q, q5 = calculate_properties(centroids)
+        lp, q, q5 = calculate_properties(centroids, "box" in file_name)
         linear.append(lp)
         quadratic.append(q)
-        quarter_five_spot.append(q5)
+        if "box" in file_name:
+            quarter_five_spot.append(q5)
 
 
     
@@ -53,8 +54,9 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
     cell_data = {
         "linear": linear,
         "quadratic": quadratic,
-        "quarter_five_spot": quarter_five_spot
     }
+    if "box" in file_name:
+        cell_data["quarter_five_spot"] = quarter_five_spot
 
     # Save modified mesh file
     file_name_without_extension = os.path.splitext(file_name)[0]

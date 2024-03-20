@@ -68,7 +68,7 @@ directives = {
 
 setup(
     name        =  project_name,
-    version     = '0.0.2',
+    version     = '0.0.3',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
     packages    = find_packages(),

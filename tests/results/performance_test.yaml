@@ -1,0 +1,156 @@
+files:
+  box0.vtk:
+    file_size: 0.02418231964111328
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 162
+    time_to_build: 0.0008658039951114915
+    time_to_interpolate: 5.09630044689402e-05
+  box1.vtk:
+    file_size: 0.08216571807861328
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 578
+    time_to_build: 0.0033605699936742894
+    time_to_interpolate: 0.0001564029953442514
+  box2.vtk:
+    file_size: 0.30214405059814453
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 2178
+    time_to_build: 0.00801369999680901
+    time_to_interpolate: 0.0001123730035033077
+  box3.vtk:
+    file_size: 1.158106803894043
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 8450
+    time_to_build: 0.02977730099519249
+    time_to_interpolate: 0.0003477299978840165
+  box4.vtk:
+    file_size: 4.534085273742676
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 33282
+    time_to_build: 0.10786547500174493
+    time_to_interpolate: 0.005811212999105919
+  hexa0.vtk:
+    file_size: 0.0058956146240234375
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 27
+    time_to_build: 0.0005269520042929798
+    time_to_interpolate: 4.187599552096799e-05
+  hexa1.vtk:
+    file_size: 0.03505420684814453
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 125
+    time_to_build: 0.0012069209988112561
+    time_to_interpolate: 4.911099676974118e-05
+  hexa2.vtk:
+    file_size: 0.24232006072998047
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 729
+    time_to_build: 0.007028088999504689
+    time_to_interpolate: 0.0002581450025900267
+  hexa3.vtk:
+    file_size: 1.8012561798095703
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 4913
+    time_to_build: 0.0561438389995601
+    time_to_interpolate: 0.00038914500328246504
+  hexa4.vtk:
+    file_size: 13.885429382324219
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 35937
+    time_to_build: 0.37992188899806933
+    time_to_interpolate: 0.0031004019983811304
+  prism0.vtk:
+    file_size: 0.6663751602172852
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 1331
+    time_to_build: 0.022726483999576885
+    time_to_interpolate: 0.00019675600196933374
+  prism1.vtk:
+    file_size: 5.086885452270508
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 9261
+    time_to_build: 0.15179922000243096
+    time_to_interpolate: 0.0008664449997013435
+  prism2.vtk:
+    file_size: 16.901047706604004
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 29791
+    time_to_build: 0.5707629490061663
+    time_to_interpolate: 0.002295414000400342
+  prism3.vtk:
+    file_size: 39.74807071685791
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 68921
+    time_to_build: 1.7502619600054459
+    time_to_interpolate: 0.007370874998741783
+  spheres.vtk:
+    file_size: 33.58340549468994
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 95751
+    time_to_build: 2.791588213003706
+    time_to_interpolate: 0.008182062003470492
+  tetra0.vtk:
+    file_size: 0.05446338653564453
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 80
+    time_to_build: 0.0346008519991301
+    time_to_interpolate: 0.00014823100354988128
+  tetra1.vtk:
+    file_size: 0.45683956146240234
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 488
+    time_to_build: 0.02585772499878658
+    time_to_interpolate: 0.0005593710011453368
+  tetra2.vtk:
+    file_size: 0.8704071044921875
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 857
+    time_to_build: 0.04164643800322665
+    time_to_interpolate: 0.0005489039976964705
+  tetra3.vtk:
+    file_size: 1.7001047134399414
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 1601
+    time_to_build: 0.0773934519966133
+    time_to_interpolate: 0.0008039399981498718
+  tetra4.vtk:
+    file_size: 3.328920364379883
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 2997
+    time_to_build: 0.14278325899795163
+    time_to_interpolate: 0.0006931550014996901
+  tetra5.vtk:
+    file_size: 6.582766532897949
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 5692
+    time_to_build: 0.3354431099942303
+    time_to_interpolate: 0.0014620259971707128
+  tetra6.vtk:
+    file_size: 13.087764739990234
+    memory_to_build: 0
+    memory_to_interpolate: 0
+    n_points: 10994
+    time_to_build: 0.6304147230039234
+    time_to_interpolate: 0.0030629050015704706
+n_files: 22
