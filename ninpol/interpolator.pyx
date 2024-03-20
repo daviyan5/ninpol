@@ -4,7 +4,7 @@ This file contains the "Interpolator" class definition, for interpolating mesh u
 import numpy as np
 import meshio
 from .grid cimport Grid
-from .methods.linear cimport distance_inverse
+from .methods.inv_dist cimport distance_inverse
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
@@ -29,7 +29,7 @@ cdef class Interpolator:
         self.is_grid_initialized = False
 
         self.supported_methods = {
-            "linear": self.linear_interpolator
+            "inv_dist": self.inv_dist_interpolator
         }
 
         self.variable_to_index = {
@@ -58,8 +58,15 @@ cdef class Interpolator:
        
         if self.mesh_obj.cell_data:
             self.load_cell_data()
+        else:
+            self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
+            self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
         if self.mesh_obj.point_data:
             self.load_point_data()
+        else:
+            self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
+            self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
         self.is_grid_initialized = True
         
@@ -273,9 +280,9 @@ cdef class Interpolator:
             source_data    = self.points_data[data_index]
             data_dimension = self.points_data_dimensions[data_index]
         
-        return self.supported_methods[method](source_data, data_dimension, source_type, target)
+        return np.asarray(self.supported_methods[method](source_data, data_dimension, source_type, target))
 
-    cdef DTYPE_F_t[::1] linear_interpolator(self, const DTYPE_F_t[::1] source_data, DTYPE_I_t data_dimension, 
+    cdef DTYPE_F_t[::1] inv_dist_interpolator(self, const DTYPE_F_t[::1] source_data, DTYPE_I_t data_dimension, 
                                             str source_type, const DTYPE_I_t[::1] target):
         
         cdef dim = self.grid_obj.n_dims
@@ -291,6 +298,5 @@ cdef class Interpolator:
                                                       weights_shape    = data_dimension,
                                                       weights          = source_data
                                                 )
-            
         return interpolated_data
 

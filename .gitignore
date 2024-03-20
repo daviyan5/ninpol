@@ -11,3 +11,5 @@ tmp/*
 cython_debug/*
 *.vtk
 *.msh
+*.vtu
+*.npy

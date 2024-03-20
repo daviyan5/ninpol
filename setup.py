@@ -1,8 +1,16 @@
 import os
+import sys
 import numpy as np
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 
+
+is_debug = False
+force = False
+# check if the environment variable is set
+if 'DEBUG_NINPOL' in os.environ:
+    is_debug = True
+    force = True
 directory_path = os.path.dirname(os.path.abspath(__file__)) 
 n_threads = os.cpu_count()
 project_name = 'ninpol'
@@ -27,9 +35,9 @@ ext_data = [
             #,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
         ),
         Extension(
-            name = f'{project_name}.methods.linear',
+            name = f'{project_name}.methods.inv_dist',
             sources = [
-                os.path.join(directory_path, project_name, 'methods', 'linear.pyx')
+                os.path.join(directory_path, project_name, 'methods', 'inv_dist.pyx')
             ],
             include_dirs = [
                 np.get_include()
@@ -60,7 +68,7 @@ directives = {
 
 setup(
     name        =  project_name,
-    version     = '0.0.2',
+    version     = '0.1.0',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
     packages    = find_packages(),
@@ -70,7 +78,7 @@ setup(
                             nthreads            =   n_threads, 
                             annotate            =   True, 
                             compiler_directives =   directives, 
-                            force               =   False,
-                            gdb_debug           =   False),
+                            force               =   force,
+                            gdb_debug           =   is_debug),
     requires=['numpy', 'cython', 'meshio', 'pyyaml']
 )
