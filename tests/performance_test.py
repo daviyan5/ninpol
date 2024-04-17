@@ -29,7 +29,7 @@ class TestGrid:
         pass        
 
     def test_imports(self):
-        from ninpol.grid import Grid
+        from ninpol import Grid
         from ninpol import Interpolator
                     
     def test_grid_build(self):
@@ -63,7 +63,7 @@ class TestGrid:
             args = interpolador.process_mesh(msh)
 
         def build_grid(interpolador, args):
-            grid_obj = ninpol.grid.Grid(*args[:9])
+            grid_obj = ninpol.Grid(*args[:9])
             grid_obj.build(*args[9:])
 
         def load_process_build(interpolador, mesh_dir, filename):
@@ -114,7 +114,7 @@ class TestGrid:
             
 
             args = interpolador.process_mesh(msh)
-            grid_obj = ninpol.grid.Grid(*args[:9])
+            grid_obj = ninpol.Grid(*args[:9])
             grid_obj.build(*args[9:])
 
             time_to_build = min(timeit.repeat(lambda: build_grid(interpolador, args), number=n_number, repeat=n_repeats))

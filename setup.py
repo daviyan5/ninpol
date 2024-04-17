@@ -5,7 +5,7 @@ from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 
 
-is_debug = False
+is_debug = True
 force = False
 # check if the environment variable is set
 if 'DEBUG_NINPOL' in os.environ:
@@ -16,28 +16,28 @@ n_threads = os.cpu_count()
 project_name = 'ninpol'
 ext_data = [
         Extension(
-            name = f'{project_name}.interpolator',
+            name = f'{project_name}._interpolator.interpolator',
             sources = [
-                os.path.join(directory_path, project_name, 'interpolator.pyx')
+                os.path.join(directory_path, project_name, '_interpolator', 'interpolator.pyx')
             ],
             include_dirs = [
                 np.get_include()
             ]
         ),
         Extension(
-            name = f'{project_name}.grid',
+            name = f'{project_name}._interpolator.grid',
             sources = [
-                os.path.join(directory_path, project_name, 'grid.pyx')
+                os.path.join(directory_path, project_name, '_interpolator', 'grid.pyx')
             ],
             include_dirs = [
                 np.get_include()
             ]
-            #,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
+            ,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
         ),
         Extension(
-            name = f'{project_name}.methods.inv_dist',
+            name = f'{project_name}._methods.inv_dist',
             sources = [
-                os.path.join(directory_path, project_name, 'methods', 'inv_dist.pyx')
+                os.path.join(directory_path, project_name, '_methods', 'inv_dist.pyx')
             ],
             include_dirs = [
                 np.get_include()
@@ -61,7 +61,7 @@ directives = {
     'initializedcheck'  : False,
     'cdivision'         : True,
     'profile'           : False,
-    'linetrace'         : False
+    'linetrace'         : True
     }
 
 

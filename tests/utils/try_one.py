@@ -11,13 +11,16 @@ mesh_dir = "./altered/"
 
 def load_mesh(mesh_dir, filename):
     msh = meshio.read(os.path.join(mesh_dir, filename))
+    return msh
 
 def process_mesh(interpolador, msh):
     args = interpolador.process_mesh(msh)
+    return args
 
 def build_grid(interpolador, args):
-    grid_obj = ninpol.grid.Grid(*args[:9])
+    grid_obj = ninpol.Grid(*args[:9])
     grid_obj.build(*args[9:])
+    return grid_obj
 
 def load_process_build(interpolador, mesh_dir, filename):
     interpolador.load_mesh(os.path.join(mesh_dir, filename))
