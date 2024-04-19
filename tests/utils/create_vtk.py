@@ -65,8 +65,8 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
     meshio.write(output_file, mesh_out)
 
 # Define directories
-input_dir = "./pure"
-output_dir = "./altered"
+input_dir = "./pure_mesh"
+output_dir = "./altered_mesh"
 
 # Create output directory if it doesn't exist
 os.makedirs(output_dir, exist_ok=True)

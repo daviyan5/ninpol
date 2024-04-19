@@ -7,7 +7,7 @@ import memory_profiler
 import analytical
 
 
-mesh_dir = "./altered/"
+mesh_dir = "./altered_mesh/"
 
 def load_mesh(mesh_dir, filename):
     msh = meshio.read(os.path.join(mesh_dir, filename))
@@ -32,7 +32,7 @@ def l2norm_relative(measure, reference):
     sqr_sum = np.sum(reference ** 2)
     return np.sqrt(np.sum((measure - reference) ** 2) / sqr_sum)
 
-mesh_file = os.path.join(os.path.dirname(__file__), "altered", "box4.vtk")
+mesh_file = os.path.join(os.path.dirname(__file__), "altered_mesh", "box4.vtk")
 msh = meshio.read(mesh_file)
 interpolador = ninpol.Interpolator()
 interpolador.load_mesh(mesh_file)

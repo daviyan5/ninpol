@@ -27,7 +27,7 @@ cdef class Interpolator:
     
     cdef readonly dict variable_to_index
 
-    cdef readonly DTYPE_F_t[:, ::1] cells_data 
+    cdef readonly DTYPE_F_t[:, ::1] cells_data
     cdef readonly DTYPE_I_t[::1] cells_data_dimensions
 
     cdef readonly DTYPE_F_t[:, ::1] points_data

@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils import analytical
 
 # Test parameters
-mesh_dir    = "tests/utils/altered/"
+mesh_dir    = "tests/utils/altered_mesh/"
 output_dir  = "tests/utils/result_mesh/"
 
 def blockPrint():

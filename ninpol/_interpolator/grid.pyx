@@ -8,34 +8,18 @@ from cython.parallel import prange
 
 cdef class Grid:
     def __cinit__(self, DTYPE_I_t n_dims, 
-                        DTYPE_I_t n_elems, DTYPE_I_t n_points, DTYPE_I_t n_faces, 
+                        DTYPE_I_t n_elems, DTYPE_I_t n_points, 
                         DTYPE_I_t[::1] nfael, DTYPE_I_t[:, ::1] lnofa, DTYPE_I_t[:, :, ::1] lpofa, 
                         DTYPE_I_t[::1] nedel, DTYPE_I_t[:, :, ::1] lpoed):
-        """
-            Initializes the grid.
+        
+        # Iterate over each member of the class
+        for name, value in self.__dict__.items():
+            # Print name and type of the member
+            print(name, type(value))
 
-            Parameters
-            ---------
-                n_dims : int
-                    Number of dimensions (i.e. 2 or 3)
-                n_elems : int
-                    Number of elements in the mesh
-                n_points : int
-                    Number of points (vertices) in the mesh
-                n_faces : int
-                    Number of faces in the mesh
-                nfael : array_like
-                    Number of faces per element
-                lnofa : array_like
-                    Number of points per face
-                lpofa : array_like
-                    Points per face
-                
-        """
         self.n_dims   = n_dims
 
         self.n_elems  = n_elems
-        self.n_faces  = n_faces
         self.n_points = n_points
 
         self.nfael    = nfael.copy()
@@ -47,6 +31,7 @@ cdef class Grid:
 
         self.are_elements_loaded = False
         self.are_coords_loaded = False
+        
         
 
 
@@ -152,9 +137,11 @@ cdef class Grid:
             dict faces_dict = {}
             int current_face_index = 0
             int unused_spaces
-            int face_index
+            int face_index = 0
 
-        self.inpofa = np.ones((self.n_faces, NINPOL_MAX_POINTS_PER_FACE), dtype=np.int64) * -1
+            int faces_upper_bound = self.n_elems * NINPOL_MAX_FACES_PER_ELEMENT
+
+        self.inpofa = np.ones((faces_upper_bound, NINPOL_MAX_POINTS_PER_FACE), dtype=np.int64) * -1
         self.infael = np.ones((self.n_elems, NINPOL_MAX_FACES_PER_ELEMENT), dtype=np.int64) * -1
 
         # For each element
@@ -187,10 +174,26 @@ cdef class Grid:
                 else:
                     face_index = faces_dict[elem_face_str]
                 self.infael[i, j] = face_index
-                
+        
+        self.n_faces = current_face_index
+        self.inpofa = self.inpofa[:self.n_faces]
     
     cdef void build_esufa(self):
-        pass
+        cdef:
+            int i, j
+            int elem_type
+
+
+        self.esufa = np.ones((self.n_faces, NINPOL_MAX_ELEMENTS_PER_FACE), dtype=np.int64) * -1
+        self.nelfa = np.zeros(self.n_faces, dtype=np.int64)
+
+        # For each element, add the element to the list of elements surrounding each face
+        for i in range(self.n_elems):
+            elem_type = self.element_types[i]
+            for j in range(self.nfael[self.element_types[i]]):
+                face = self.infael[i, j]
+                self.esufa[face, self.nelfa[face]] = i
+                self.nelfa[face] += 1
 
     cdef void build_esuel(self):
         

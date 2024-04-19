@@ -74,6 +74,10 @@ cdef class Grid:
         Elements surrounding faces
         i.e : The elements surrounding face i are in esufa[i, :])
 
+    nelfa: numpy.ndarray
+        Number of elements that share a face
+        i.e : The number of elements that share face i is nelfa[i]
+
     esuel : numpy.ndarray
         Elements surrounding elements 
         i.e : The elements surrounding element i are in esuel[i, :])
@@ -121,7 +125,9 @@ cdef class Grid:
 
     cdef readonly DTYPE_I_t[:, ::1] inpofa
     cdef readonly DTYPE_I_t[:, ::1] infael
+
     cdef readonly DTYPE_I_t[:, ::1] esufa
+    cdef readonly DTYPE_I_t[::1] nelfa
     
     cdef readonly DTYPE_I_t[:, ::1] esuel
 

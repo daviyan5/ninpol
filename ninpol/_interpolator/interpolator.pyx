@@ -49,11 +49,11 @@ cdef class Interpolator:
         cdef tuple args = self.process_mesh(self.mesh_obj)
 
         self.grid_obj = Grid(args[0], 
-                             args[1], args[2], args[3], 
-                             args[4], args[5], args[6], 
-                             args[7], args[8])
+                             args[1], args[2], 
+                             args[3], args[4], args[5], 
+                             args[6], args[7])
 
-        self.grid_obj.build(args[9], args[10], args[11])
+        self.grid_obj.build(args[8], args[8], args[10])
         
         self.grid_obj.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
         self.grid_obj.calculate_cells_centroids()
@@ -76,7 +76,7 @@ cdef class Interpolator:
         cdef:
             int dim = mesh.points.shape[1]
             int n_points = mesh.points.shape[0]
-            int n_elems = 0, n_faces = 0
+            int n_elems = 0
 
             int nfael_e
             list lnofa_e, lpofa_e
@@ -121,7 +121,7 @@ cdef class Interpolator:
             type_index = elem_type["element_type"]
             
             nfael[type_index] = nfael_e
-            if faces_key in elem_type:
+            if "faces" in elem_type:
                 for i, n_point in enumerate(lnofa_e):
                     lnofa[type_index, i] = n_point
                     
@@ -139,11 +139,7 @@ cdef class Interpolator:
 
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
-            
             n_elems += len(CellBlock.data)
-            if faces_key in self.point_ordering["elements"][elem_type_str]:   
-                n_faces += len(CellBlock.data) * len(self.point_ordering["elements"][elem_type_str][faces_key])
-        
 
         cdef: 
             dict point_tag_to_index = {}
@@ -169,7 +165,8 @@ cdef class Interpolator:
                 n_points_per_elem[cell_index] = len(cell)
                 cell_index += 1
 
-        return (dim, n_elems, n_points, n_faces, 
+        return (dim, 
+                n_elems, n_points, 
                 nfael, lnofa, lpofa, 
                 nedel, lpoed,
                 connectivity, element_types, n_points_per_elem)

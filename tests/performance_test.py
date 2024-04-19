@@ -11,7 +11,7 @@ import memory_profiler
 from results import test_graphs
 
 # Test parameters
-mesh_dir    = "tests/utils/altered/"
+mesh_dir    = "tests/utils/altered_mesh/"
 n_number    = 1
 n_repeats   = 1
 
