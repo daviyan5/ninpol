@@ -94,10 +94,10 @@ cdef class Grid:
         self.build_psup()
 
         # Calculate the faces composing each element
-        #self.build_infael()
+        self.build_infael()
         
         # Calculate the elements surrounding each face
-        #self.build_esufa()
+        self.build_esufa()
         
         # Calculate the elements surrounding each element
         self.build_esuel()
