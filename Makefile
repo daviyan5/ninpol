@@ -15,6 +15,10 @@ clean:
 	@echo "Cleaning..."
 	@python3 build/clean.py
 	@echo "Done"
+debug:
+	@echo "Compilling in debug mode..."
+	@python3 setup.py build_ext --inplace --debug
+	@echo "Done"
 test:
 	@echo "Creating vtk files..."
 	@python3 tests/utils/create_vtk.py

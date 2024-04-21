@@ -14,6 +14,7 @@ from results import test_graphs
 mesh_dir    = "tests/utils/altered_mesh/"
 n_number    = 1
 n_repeats   = 1
+n_files     = -1
 
 # Disable
 def blockPrint():
@@ -26,7 +27,19 @@ def enablePrint():
 class TestGrid:
     @pytest.fixture(autouse=True)
     def set_parameters(self, request):
-        pass        
+        # Set parameters
+        n_files = request.config.getoption("--n-files")
+        if n_files is not None:
+            n_files = int(n_files)
+        else:
+            n_files = -1
+        
+        n_repeats = request.config.getoption("--n-repeats")
+        if n_repeats is not None:
+            n_repeats = int(n_repeats)
+        else:
+            n_repeats = 1
+
 
     def test_imports(self):
         from ninpol import Grid
@@ -36,16 +49,18 @@ class TestGrid:
         """
         Tests whether the grid is built correctly.
         """
+        global n_files
 
         # Iterate over n_files files of mesh_dir
         files   = sorted(os.listdir(mesh_dir))
         # Remove .gitkeep
         if ".gitkeep" in files:
             files.remove(".gitkeep")
-        n_files = len(files)
+        if n_files == -1:
+            n_files = len(files)
         
         interpolador = ninpol.Interpolator()
-
+        
         for case in range(n_files):
             blockPrint()
             interpolador.load_mesh(mesh_dir + files[case])
@@ -55,7 +70,8 @@ class TestGrid:
         """
         Tests whether the grid is built efficiently.
         """
-    
+        global n_files
+
         def load_mesh(mesh_dir, filename):
             msh = meshio.read(os.path.join(mesh_dir, filename))
 
@@ -63,14 +79,14 @@ class TestGrid:
             args = interpolador.process_mesh(msh)
 
         def build_grid(interpolador, args):
-            grid_obj = ninpol.Grid(*args[:9])
-            grid_obj.build(*args[9:])
+            grid_obj = ninpol.Grid(*args)
+            grid_obj.build()
 
         def load_process_build(interpolador, mesh_dir, filename):
             interpolador.load_mesh(os.path.join(mesh_dir, filename))
 
         def interpolate(interpolador, points):
-            interpolador.interpolate(points, "linear", "inv_dist", "ctp")
+            interpolador.interpolate(points, "linear", "inv_dist")
         
         def average_memory(func):
             average = 0
@@ -87,8 +103,8 @@ class TestGrid:
         # Remove .gitkeep
         if ".gitkeep" in files:
             files.remove(".gitkeep")
-        n_files = len(files)
-        
+        if n_files == -1:
+            n_files = len(files)
         print("\n==============================================\n")
 
         # Create dict for yaml with results
@@ -114,8 +130,8 @@ class TestGrid:
             
 
             args = interpolador.process_mesh(msh)
-            grid_obj = ninpol.Grid(*args[:9])
-            grid_obj.build(*args[9:])
+            grid_obj = ninpol.Grid(*args)
+            grid_obj.build()
 
             time_to_build = min(timeit.repeat(lambda: build_grid(interpolador, args), number=n_number, repeat=n_repeats))
             memory_to_build = average_memory((build_grid, (interpolador, args)))

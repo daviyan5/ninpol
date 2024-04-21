@@ -16,6 +16,7 @@ from utils import analytical
 # Test parameters
 mesh_dir    = "tests/utils/altered_mesh/"
 output_dir  = "tests/utils/result_mesh/"
+n_files     = -1
 
 def blockPrint():
     sys.stdout = open(os.devnull, 'w')
@@ -35,16 +36,25 @@ FUNCTIONS = [analytical.linear, analytical.quadratic, analytical.quarter_five_sp
 NAMES     = ["linear", "quadratic", "quarter_five_spot"]
 
 class TestInterpolator:
+    # def test_construction(self):
+    #     """
+    #     Tests wheter the construction of the interpolator's grid object is correct.
+    #     """
+    #     pass
+    
     def test_accuracy(self):
         """
         Tests whether the interpolator is accurate.
         """
+        global n_files
         # Iterate over n_files files of mesh_dir
         files   = sorted(os.listdir(mesh_dir))
         # Remove .gitkeep
         if ".gitkeep" in files:
             files.remove(".gitkeep")
-        n_files = len(files)
+        
+        if n_files == -1:
+            n_files = len(files)
         
         results = {}
         results["n_files"] = n_files
@@ -76,7 +86,7 @@ class TestInterpolator:
                         continue
                         
                     reference = function(points_coords)
-                    measure = np.asarray(interpolador.interpolate(points, name, method, "ctp"))
+                    measure = np.asarray(interpolador.interpolate(points, name, method))
                     norm = float(l2norm_relative(measure, reference))
                     
                     results["files"][files[case]]["methods"][method]["error_" + name] = norm

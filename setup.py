@@ -5,12 +5,16 @@ from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
 
 
-is_debug = True
-force = False
-# check if the environment variable is set
-if 'DEBUG_NINPOL' in os.environ:
+is_debug = False
+force    = False
+
+# check if the --debug flag has been passed
+if '--debug' in sys.argv:
     is_debug = True
-    force = True
+    force    = True
+
+print("Debug mode: ", is_debug)
+
 directory_path = os.path.dirname(os.path.abspath(__file__)) 
 n_threads = os.cpu_count()
 project_name = 'ninpol'
@@ -32,7 +36,6 @@ ext_data = [
             include_dirs = [
                 np.get_include()
             ]
-            ,define_macros=[('CYTHON_TRACE', '1'), ('CYTHON_TRACE_NOGIL', '1')]
         ),
         Extension(
             name = f'{project_name}._methods.inv_dist',
@@ -50,19 +53,21 @@ package_data = {
 }
 
 for e in ext_data:
-    e.extra_compile_args = ['-O3', '-fopenmp']
+    e.extra_compile_args = ['-O3', '-fopenmp'] if not is_debug else ['-O0', '-g', '-fopenmp']
     e.extra_link_args    = ['-fopenmp']
     e.define_macros      = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+    if is_debug:
+        e.define_macros.append(('CYTHON_TRACE_NOGIL', '1'))
 
 directives = {
-    'boundscheck'       : False,
-    'wraparound'        : False,
-    'nonecheck'         : False,
-    'initializedcheck'  : False,
-    'cdivision'         : True,
-    'profile'           : False,
-    'linetrace'         : True
-    }
+    'boundscheck'       : False if not is_debug else True,
+    'wraparound'        : False, # Always false, since it can hide bugs
+    'nonecheck'         : False if not is_debug else True,
+    'initializedcheck'  : False if not is_debug else True,
+    'cdivision'         : True if not is_debug else False,
+    'profile'           : False if not is_debug else True,
+    'linetrace'         : False if not is_debug else True
+}
 
 
 
