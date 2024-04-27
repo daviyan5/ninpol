@@ -66,7 +66,9 @@ cdef class Grid:
 
     inpofa: numpy.ndarray
         Points that compose each face
-        i.e : The points that compose face i are in inpofa[i, :])
+        i.e : The points that compose face i are in inpofa[i, :]
+        OBS: Due to the way the faces are defined, the points will be ordered following the order of ONE of the elements that share the face.
+        This means that lpofa should be used to get the correct order of the points.
 
     infael: numpy.ndarray
         Faces that compose each element
@@ -93,6 +95,8 @@ cdef class Grid:
     inpoed: numpy.ndarray
         Points that compose each edge
         i.e : The points that compose edge i are in inpoed[i, :])
+        OBS: Due to the way the edges are defined, the points will be ordered following the order of ONE of the elements that share the edge.
+        This means that lpoed should be used to get the correct order of the points.
 
     inedel : numpy.ndarray
         Edges that compose each element
@@ -108,6 +112,12 @@ cdef class Grid:
 
     cdef readonly int are_elements_loaded
     cdef readonly int are_coords_loaded
+    cdef readonly int are_structures_built
+    cdef readonly int are_centroids_calculated
+    
+    cdef readonly int MX_ELEMENTS_PER_POINTS
+    cdef readonly int MX_POINTS_PER_POINTS
+    cdef readonly int MX_ELEMENTS_PER_FACE
 
     cdef readonly DTYPE_F_t[:, ::1] point_coords
     cdef readonly DTYPE_F_t[:, ::1] centroids
@@ -133,7 +143,6 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[::1] esufa
     cdef readonly DTYPE_I_t[::1] esufa_ptr
 
-    
     cdef readonly DTYPE_I_t[:, ::1] esuel
 
     cdef readonly DTYPE_I_t[::1] nedel

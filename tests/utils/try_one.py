@@ -32,7 +32,7 @@ def l2norm_relative(measure, reference):
     sqr_sum = np.sum(reference ** 2)
     return np.sqrt(np.sum((measure - reference) ** 2) / sqr_sum)
 
-mesh_file = os.path.join(os.path.dirname(__file__), "altered_mesh", "tetra0.vtk")
+mesh_file = os.path.join(os.path.dirname(__file__), "altered_mesh", "hexa0.vtk")
 msh = meshio.read(mesh_file)
 interpolador = ninpol.Interpolator()
 interpolador.load_mesh(mesh_file)

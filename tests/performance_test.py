@@ -9,22 +9,24 @@ import yaml
 from colorama import Fore, Style
 import memory_profiler
 from results import test_graphs
+import datetime
+
 
 # Test parameters
 mesh_dir    = "tests/utils/altered_mesh/"
-n_number    = 1
-n_repeats   = 1
+n_number    = 1 # Number of times the code is executed
+n_repeats   = 1 # Number of times the code is repeated
 n_files     = -1
 
 # Disable
-def blockPrint():
+def block_print():
     sys.stdout = open(os.devnull, 'w')
 
 # Restore
-def enablePrint():
+def enable_print():
     sys.stdout = sys.__stdout__
 
-class TestGrid:
+class TestPerformance:
     @pytest.fixture(autouse=True)
     def set_parameters(self, request):
         # Set parameters
@@ -44,27 +46,6 @@ class TestGrid:
     def test_imports(self):
         from ninpol import Grid
         from ninpol import Interpolator
-                    
-    def test_grid_build(self):
-        """
-        Tests whether the grid is built correctly.
-        """
-        global n_files
-
-        # Iterate over n_files files of mesh_dir
-        files   = sorted(os.listdir(mesh_dir))
-        # Remove .gitkeep
-        if ".gitkeep" in files:
-            files.remove(".gitkeep")
-        if n_files == -1:
-            n_files = len(files)
-        
-        interpolador = ninpol.Interpolator()
-        
-        for case in range(n_files):
-            blockPrint()
-            interpolador.load_mesh(mesh_dir + files[case])
-            enablePrint()
 
     def test_grid_speed(self):
         """
@@ -207,7 +188,7 @@ class TestGrid:
 
 
             print("==============================================")
-
+        result_dict["datetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         with open("tests/results/performance_test.yaml", "w") as f:
             yaml.dump(result_dict, f)
         

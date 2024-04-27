@@ -1,156 +1,157 @@
+datetime: 2024-04-27 20:29
 files:
   box0.vtk:
     file_size: 0.02418231964111328
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 162
-    time_to_build: 0.005996232997858897
-    time_to_interpolate: 0.00010182800178881735
+    time_to_build: 0.010020974001236027
+    time_to_interpolate: 6.810199920437299e-05
   box1.vtk:
     file_size: 0.08216571807861328
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 578
-    time_to_build: 0.019227083001169376
-    time_to_interpolate: 8.432799950242043e-05
+    time_to_build: 0.029808766998030478
+    time_to_interpolate: 0.00011368599734851159
   box2.vtk:
     file_size: 0.30214405059814453
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 2178
-    time_to_build: 0.09079094999469817
-    time_to_interpolate: 0.022313745997962542
+    time_to_build: 0.11604494399944087
+    time_to_interpolate: 0.0001675769999565091
   box3.vtk:
     file_size: 1.158106803894043
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 8450
-    time_to_build: 0.3051484649986378
-    time_to_interpolate: 0.02417083900218131
+    time_to_build: 0.37272191800002474
+    time_to_interpolate: 0.00041459399653831497
   box4.vtk:
     file_size: 4.534085273742676
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 33282
-    time_to_build: 1.0101556400040863
-    time_to_interpolate: 0.0010986440029228106
+    time_to_build: 1.4129572169986204
+    time_to_interpolate: 0.0013021890008531045
   hexa0.vtk:
     file_size: 0.0058956146240234375
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 27
-    time_to_build: 0.0014883640033076517
-    time_to_interpolate: 3.850899520330131e-05
+    time_to_build: 0.0020861060002062004
+    time_to_interpolate: 4.953199822921306e-05
   hexa1.vtk:
     file_size: 0.03505420684814453
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 125
-    time_to_build: 0.006969688998651691
-    time_to_interpolate: 5.841899837832898e-05
+    time_to_build: 0.0097548129997449
+    time_to_interpolate: 7.535400072811171e-05
   hexa2.vtk:
     file_size: 0.24232006072998047
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 729
-    time_to_build: 0.047005174004880246
-    time_to_interpolate: 0.00025551600265316665
+    time_to_build: 0.06595176699920557
+    time_to_interpolate: 0.00027906999821425416
   hexa3.vtk:
     file_size: 1.8012561798095703
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 4913
-    time_to_build: 0.34585914500348736
-    time_to_interpolate: 0.0003777680030907504
+    time_to_build: 0.4752186050027376
+    time_to_interpolate: 0.0004488560007303022
   hexa4.vtk:
     file_size: 13.885429382324219
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 35937
-    time_to_build: 2.654359795000346
-    time_to_interpolate: 0.002591959993878845
+    time_to_build: 3.8043570430018008
+    time_to_interpolate: 0.003529076999257086
   prism0.vtk:
     file_size: 0.6663751602172852
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 1331
-    time_to_build: 0.12599359100568108
-    time_to_interpolate: 0.0001435939993825741
+    time_to_build: 0.1811269589998119
+    time_to_interpolate: 0.00016038199828471988
   prism1.vtk:
     file_size: 5.086885452270508
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 9261
-    time_to_build: 0.9643826179963071
-    time_to_interpolate: 0.0008077759994193912
+    time_to_build: 1.3917515200009802
+    time_to_interpolate: 0.0008662860018375795
   prism2.vtk:
     file_size: 16.901047706604004
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 29791
-    time_to_build: 3.2052112000019406
-    time_to_interpolate: 0.0024446850002277642
+    time_to_build: 4.793954224001936
+    time_to_interpolate: 0.0026736130021163262
   prism3.vtk:
     file_size: 39.74807071685791
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 68921
-    time_to_build: 7.749936284999421
-    time_to_interpolate: 0.006056661004549824
+    time_to_build: 11.326304875998176
+    time_to_interpolate: 0.0064606240011926275
   spheres.vtk:
     file_size: 33.58340549468994
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 95751
-    time_to_build: 9.981584991997806
-    time_to_interpolate: 0.007430074998410419
+    time_to_build: 18.315089130999695
+    time_to_interpolate: 0.007421311998768942
   tetra0.vtk:
     file_size: 0.05446338653564453
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 80
-    time_to_build: 0.011373818000720348
-    time_to_interpolate: 0.00011457999789854512
+    time_to_build: 0.015529534000961576
+    time_to_interpolate: 0.00010442299753776751
   tetra1.vtk:
     file_size: 0.45683956146240234
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 488
-    time_to_build: 0.08888637599739013
-    time_to_interpolate: 0.0004118490032851696
+    time_to_build: 0.13221751200035214
+    time_to_interpolate: 0.00046002700037206523
   tetra2.vtk:
     file_size: 0.8704071044921875
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 857
-    time_to_build: 0.16482541099685477
-    time_to_interpolate: 0.0004357549987616949
+    time_to_build: 0.2477676380003686
+    time_to_interpolate: 0.0005896479997318238
   tetra3.vtk:
     file_size: 1.7001047134399414
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 1601
-    time_to_build: 0.3175884829979623
-    time_to_interpolate: 0.00034360399877186865
+    time_to_build: 0.4795025050007098
+    time_to_interpolate: 0.00040200700095738284
   tetra4.vtk:
     file_size: 3.328920364379883
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 2997
-    time_to_build: 0.6317972969991388
-    time_to_interpolate: 0.0006323519992292859
+    time_to_build: 0.9482046419980179
+    time_to_interpolate: 0.0006932969990884885
   tetra5.vtk:
     file_size: 6.582766532897949
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 5692
-    time_to_build: 1.27008388700051
-    time_to_interpolate: 0.0012030879952362739
+    time_to_build: 1.9002886950001994
+    time_to_interpolate: 0.0012467589986044914
   tetra6.vtk:
     file_size: 13.087764739990234
     memory_to_build: 0
     memory_to_interpolate: 0
     n_points: 10994
-    time_to_build: 2.519804039002338
-    time_to_interpolate: 0.0025998619967140257
+    time_to_build: 3.926658453001437
+    time_to_interpolate: 0.003305850001197541
 n_files: 22

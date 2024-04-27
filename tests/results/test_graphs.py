@@ -1,4 +1,5 @@
 import numpy as np
+import datetime
 
 
 def graph_performance():
@@ -49,7 +50,10 @@ def graph_performance():
         ax.legend()
         ax.grid(True)
 
-
+    # Add a title with date and time
+    plt.suptitle("Time to Build and Interpolate for different meshes", fontsize=16)
+    figtextstr = "DATA: " + data["datetime"] + " - PLOT:" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    plt.figtext(0.5, 0.01, figtextstr, ha="center", fontsize=10, color="gray")
     plt.tight_layout()
 
     save_path = os.path.join(os.path.dirname(__file__), "performance_test.png")
@@ -74,7 +78,13 @@ def graph_performance():
         ax.legend()
         ax.grid(True)
 
+    # Add a title with date and time
+    plt.suptitle("Time to Interpolate for different meshes", fontsize=16)
+    figtextstr = "DATA: " + data["datetime"] + " - PLOT:" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    plt.figtext(0.5, 0.01, figtextstr, ha="center", fontsize=10, color="gray")
+
     plt.tight_layout()
+    
     save_path = os.path.join(os.path.dirname(__file__), "performance_test_interpolation.png")
     plt.savefig(save_path)
 
@@ -152,7 +162,12 @@ def graph_accuracy():
         col = i % 2
         fig.delaxes(axes[row, col])
 
+    plt.suptitle("Error for different meshes", fontsize=16)
+    figtextstr = "DATA: " + data["datetime"] + " - PLOT:" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    plt.figtext(0.5, 0.01, figtextstr, ha="center", fontsize=10, color="gray")
     plt.tight_layout()
+    # Add a title with date and time
+    
     # Save the plot
     save_path = os.path.join(os.path.dirname(__file__), "accuracy_test.png")
     plt.savefig(save_path)

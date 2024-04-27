@@ -13,10 +13,10 @@ if '--debug' in sys.argv:
     is_debug = True
     force    = True
 
-print("Debug mode: ", is_debug)
+print(" ============= Debug mode:", str(is_debug) + " ============= ")
 
 directory_path = os.path.dirname(os.path.abspath(__file__)) 
-n_threads = os.cpu_count()
+n_threads = os.cpu_count() if not is_debug else 1
 project_name = 'ninpol'
 ext_data = [
         Extension(

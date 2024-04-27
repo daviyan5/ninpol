@@ -18,10 +18,10 @@ mesh_dir    = "tests/utils/altered_mesh/"
 output_dir  = "tests/utils/result_mesh/"
 n_files     = -1
 
-def blockPrint():
+def block_print():
     sys.stdout = open(os.devnull, 'w')
 
-def enablePrint():
+def enable_print():
     sys.stdout = sys.__stdout__
 
 def l2norm_relative(measure, reference):
@@ -35,12 +35,7 @@ def l2norm_array(measure, reference):
 FUNCTIONS = [analytical.linear, analytical.quadratic, analytical.quarter_five_spot]
 NAMES     = ["linear", "quadratic", "quarter_five_spot"]
 
-class TestInterpolator:
-    # def test_construction(self):
-    #     """
-    #     Tests wheter the construction of the interpolator's grid object is correct.
-    #     """
-    #     pass
+class TestAccuracy:
     
     def test_accuracy(self):
         """
@@ -56,12 +51,12 @@ class TestInterpolator:
         if n_files == -1:
             n_files = len(files)
         
-        results = {}
-        results["n_files"] = n_files
-        results["files"] = {}
+        results_dict = {}
+        results_dict["n_files"] = n_files
+        results_dict["files"] = {}
 
         print("\n=========================================================")
-        print(f"{Fore.WHITE}{'File':<10}{'Variable':<20}{'Method':<10}{'Error'}{Style.RESET_ALL}")
+        print(f"{Fore.WHITE}{'File':<15}{'Variable':<20}{'Method':<10}{'Error'}{Style.RESET_ALL}")
         for case in range(n_files):
             print(f"{Fore.BLUE}{files[case]:<15}{f'{case}/{n_files}':<10}{Style.RESET_ALL}")
 
@@ -72,14 +67,14 @@ class TestInterpolator:
             n_points = points_coords.shape[0]
             points = np.arange(n_points)
 
-            results["files"][files[case]] = {}
-            results["files"][files[case]]["n_points"] = n_points
-            results["files"][files[case]]["methods"] = {}
+            results_dict["files"][files[case]] = {}
+            results_dict["files"][files[case]]["n_points"] = n_points
+            results_dict["files"][files[case]]["methods"] = {}
             msh = meshio.read(mesh_dir + files[case])
             point_data = msh.point_data
 
             for method in interpolador.supported_methods.keys():
-                results["files"][files[case]]["methods"][method] = {}
+                results_dict["files"][files[case]]["methods"][method] = {}
                 for function, name in zip(FUNCTIONS, NAMES):
                     
                     if name not in msh.cell_data:
@@ -89,20 +84,22 @@ class TestInterpolator:
                     measure = np.asarray(interpolador.interpolate(points, name, method))
                     norm = float(l2norm_relative(measure, reference))
                     
-                    results["files"][files[case]]["methods"][method]["error_" + name] = norm
-                    print(f"{Fore.LIGHTWHITE_EX}{'  -  ':<15}{name:<20}{Fore.LIGHTYELLOW_EX}{method:<10}{Fore.LIGHTRED_EX}{norm:2e}{Style.RESET_ALL}")
+                    results_dict["files"][files[case]]["methods"][method]["error_" + name] = norm
+                    print(f"{Fore.LIGHTWHITE_EX}{'  ~  ':<15}{name:<20}{Fore.LIGHTYELLOW_EX}{method:<10}{Fore.LIGHTRED_EX}{norm:2e}{Style.RESET_ALL}")
                     point_data[name + "_" + method] = measure
                     point_data[name + "_" + method + "_error"] = l2norm_array(measure, reference)
 
             mesh_out = meshio.Mesh(msh.points, msh.cells, cell_data=msh.cell_data, point_data=point_data)
             # Remove extension from file name
             filename_without_extension = os.path.splitext(files[case])[0]
-            blockPrint()
+            block_print()
             meshio.write(output_dir + filename_without_extension + ".vtu", mesh_out)
-            enablePrint()
+            enable_print()
             print("=========================================================")
-
+        
+        import datetime
+        results_dict["datetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         with open("tests/results/accuracy_test.yaml", "w") as f:
-            yaml.dump(results, f)
+            yaml.dump(results_dict, f)
 
         test_graphs.graph_accuracy()

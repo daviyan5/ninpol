@@ -33,6 +33,10 @@ cdef class Grid:
         self.n_faces = 0
         self.n_edges = 0
 
+        self.MX_ELEMENTS_PER_POINTS = 0
+        self.MX_POINTS_PER_POINTS = 0
+        self.MX_ELEMENTS_PER_FACE = 0
+
         def _validate_shape(array, expected_shape):
             if array.shape != expected_shape:
                 raise ValueError(f"The array must have shape {expected_shape}, not {array.shape}.")
@@ -59,8 +63,11 @@ cdef class Grid:
         self.inpoel         = connectivity.copy()
         self.element_types  = element_types.copy()
         
-        self.are_elements_loaded = True
-        self.are_coords_loaded = False
+        self.are_elements_loaded      = True
+        self.are_coords_loaded        = False
+        self.are_structures_built     = False
+        self.are_centroids_calculated = False
+
         
         # Set every other member memory_slice to zero
         self.esup               = np.zeros(0,       dtype=DTYPE_I)
@@ -105,11 +112,13 @@ cdef class Grid:
         # Calculate the edges surrounding each element
         self.build_inedel()
 
+        self.are_structures_built = True
     cdef void build_esup(self):
         
         cdef:
             int i, j
             int elem_type
+            int point
 
         # Reshape the arrays
         self.esup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
@@ -118,7 +127,10 @@ cdef class Grid:
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             for j in range(self.npoel[elem_type]):
-                self.esup_ptr[self.inpoel[i, j] + 1] += 1
+                point = self.inpoel[i, j]
+                self.esup_ptr[point + 1] += 1
+                self.MX_ELEMENTS_PER_POINTS = max(self.MX_ELEMENTS_PER_POINTS, 
+                                                  self.esup_ptr[point + 1])
         
         # Compute the cumulative sum of the number of elements surrounding each point
         for i in range(self.n_points):
@@ -129,8 +141,9 @@ cdef class Grid:
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             for j in range(self.npoel[elem_type]):
-                self.esup[self.esup_ptr[self.inpoel[i, j]]] = i
-                self.esup_ptr[self.inpoel[i, j]] += 1
+                point = self.inpoel[i, j]
+                self.esup[self.esup_ptr[point]] = i
+                self.esup_ptr[point] += 1
         
         for i in range(self.n_points, 0, -1):
             self.esup_ptr[i] = self.esup_ptr[i-1]
@@ -149,7 +162,7 @@ cdef class Grid:
         self.psup_ptr[0] = 0
     
         # Upper bound for the number of points surrounding each point, pehaps this can be improved
-        self.psup = np.zeros((self.esup_ptr[self.n_points] * (7)), dtype=DTYPE_I) 
+        self.psup = np.zeros((self.esup_ptr[self.n_points] * (NINPOL_MAX_POINTS_PER_ELEMENT - 1)), dtype=DTYPE_I) 
 
         # Calculate the points surrounding each point, using temp_psup to avoid duplicates
         for i in range(self.n_points):
@@ -165,6 +178,8 @@ cdef class Grid:
                         stor_ptr += 1
                         
             self.psup_ptr[i+1] = stor_ptr
+            self.MX_POINTS_PER_POINTS = max(self.MX_POINTS_PER_POINTS,
+                                            self.psup_ptr[i + 1] - self.psup_ptr[i])
 
         # Resize the psup array to remove padding
         self.psup = self.psup[:stor_ptr]
@@ -197,7 +212,7 @@ cdef class Grid:
         # For each element
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
-
+            
             # For each face
             for j in range(self.nfael[elem_type]):
                 elem_face_str = ""
@@ -227,25 +242,47 @@ cdef class Grid:
                 else:
                     face_index = faces_dict[elem_face_str]
                 self.infael[i, j] = face_index
+
         
         self.n_faces = current_face_index
         self.inpofa = self.inpofa[:self.n_faces]
     
     cdef void build_esufa(self):
+
+        # Same logic as esup
         cdef:
             int i, j
             int elem_type
+            int face
 
 
-        self.esufa = np.ones((self.n_faces * NINPOL_MAX_ELEMENTS_PER_FACE), dtype=DTYPE_I) * -1
-        self.esufa_ptr = np.zeros(self.n_faces+1, dtype=DTYPE_I)
+        self.esufa_ptr = np.zeros(self.n_faces + 1, dtype=DTYPE_I)
 
-        # Compute cumulative sum of the number of elements surrounding each face
+        # Count the number of faces surrounding each point 
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             for j in range(self.nfael[elem_type]):
                 face = self.infael[i, j]
-                self.esufa_ptr[self.infael[i, j] + 1] += 1
+                self.esufa_ptr[face + 1] += 1
+                self.MX_ELEMENTS_PER_FACE = max(self.MX_ELEMENTS_PER_FACE, 
+                                                self.esufa_ptr[face + 1])
+
+        # Compute the cumulative sum of the number of faces surrounding each point
+        for i in range(self.n_faces):
+            self.esufa_ptr[i + 1] += self.esufa_ptr[i]
+        
+        # Fill the esufa array
+        self.esufa = np.zeros((self.esufa_ptr[self.n_faces]), dtype=DTYPE_I)
+        for i in range(self.n_elems):
+            elem_type = self.element_types[i]
+            for j in range(self.nfael[elem_type]):
+                face = self.infael[i, j]
+                self.esufa[self.esufa_ptr[face]] = i
+                self.esufa_ptr[face] += 1
+
+        for i in range(self.n_faces, 0, -1):
+            self.esufa_ptr[i] = self.esufa_ptr[i-1]
+        self.esufa_ptr[0] = 0
 
 
     cdef void build_esuel(self):
@@ -397,7 +434,62 @@ cdef class Grid:
         self.inpoed = self.inpoed[:self.n_edges]
 
                     
+    def get_data(self):
+        """
+        Returns the data of the grid as np.arrays.
+        If the mesh is big, this method can be slow, as it does not cache the data and extensive copying is done.
+        """
+        import warnings
 
+        cdef:
+            dict data
+
+        if self.are_coords_loaded == False:
+            warnings.warn("The point coordinates have not been set.")
+        if self.are_structures_built == False:
+            raise ValueError("The structures have not been built.")
+        if self.are_centroids_calculated == False:
+            warnings.warn("The centroids have not been calculated.")
+
+        data = {
+            'inpoel':        self.inpoel.copy(),
+            'element_types': self.element_types.copy(),
+            'inpofa':        self.inpofa.copy(),
+            'infael':        self.infael.copy(),
+            'inpoed':        self.inpoed.copy(),
+            'inedel':        self.inedel.copy(),
+            'point_coords':  self.point_coords.copy(),
+            'centroids':     self.centroids.copy()
+        }
+
+        # Converts the data that needs pointers (e.g esup) to bi-dimensional arrays
+        cdef:
+            int i, j
+
+            DTYPE_I_t[:, ::1] esup2d = np.ones((self.n_points, self.MX_ELEMENTS_PER_POINTS), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] psup2d = np.ones((self.n_points, self.MX_POINTS_PER_POINTS),   dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] esufa2d = np.ones((self.n_faces, self.MX_ELEMENTS_PER_FACE),   dtype=DTYPE_I) * -1
+
+        for i in range(self.n_points):
+            for j in range(self.esup_ptr[i], self.esup_ptr[i+1]):
+                esup2d[i, j - self.esup_ptr[i]] = self.esup[j]
+
+            for j in range(self.psup_ptr[i], self.psup_ptr[i+1]):
+                psup2d[i, j - self.psup_ptr[i]] = self.psup[j]
+        
+        for i in range(self.n_faces):
+            for j in range(self.esufa_ptr[i], self.esufa_ptr[i+1]):
+                esufa2d[i, j - self.esufa_ptr[i]] = self.esufa[j]
+
+        data['esup']    = esup2d.copy()
+        data['psup']    = psup2d.copy()
+        data['esufa']   = esufa2d.copy()
+
+        for key in data:
+            data[key] = np.asarray(data[key])
+
+        return data
+        
     
     cdef void load_point_coords(self, const DTYPE_F_t[:, ::1] coords):
         self.point_coords = coords.copy()
@@ -418,6 +510,7 @@ cdef class Grid:
         # Then, using esufa, we can calculate the volume and centroid of each element
 
         # However, for now, we will use only the average of the points
+
         cdef:
             int i, j, k
             int elem_type
@@ -437,4 +530,5 @@ cdef class Grid:
                 for k in range(self.n_dims):
                     self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k] / npoel_e
 
+        self.are_centroids_calculated = True
         
