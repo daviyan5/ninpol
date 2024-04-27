@@ -3,13 +3,10 @@ This file contains the "Interpolator" class definition, for interpolating mesh u
 """
 import numpy as np
 import meshio
-from .grid cimport Grid
-from .methods.inv_dist cimport distance_inverse
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
 
-cdef type MeshioMesh = meshio._mesh.Mesh
 
 cdef class Interpolator:
 
@@ -20,7 +17,8 @@ cdef class Interpolator:
 
         cdef:
             str current_directory = os.path.dirname(os.path.abspath(__file__))
-            str point_ordering_path = os.path.join(current_directory, "utils", "point_ordering.yaml")
+            str current_parent_directory = os.path.dirname(current_directory)
+            str point_ordering_path = os.path.join(current_parent_directory, "utils", "point_ordering.yaml")
         
         
         with open(point_ordering_path, 'r') as f:
@@ -36,6 +34,10 @@ cdef class Interpolator:
             "points": {},
             "cells": {}
         }
+        self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
+        self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+        self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
+        self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
     
     def load_mesh(self, str filename = ""):
         if filename == "":
@@ -46,12 +48,9 @@ cdef class Interpolator:
 
         cdef tuple args = self.process_mesh(self.mesh_obj)
 
-        self.grid_obj = Grid(args[0], 
-                             args[1], args[2], args[3], 
-                             args[4], args[5], args[6], 
-                             args[7], args[8])
+        self.grid_obj = Grid(*args)
 
-        self.grid_obj.build(args[9], args[10], args[11])
+        self.grid_obj.build()
         
         self.grid_obj.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
         self.grid_obj.calculate_cells_centroids()
@@ -74,7 +73,7 @@ cdef class Interpolator:
         cdef:
             int dim = mesh.points.shape[1]
             int n_points = mesh.points.shape[0]
-            int n_elems = 0, n_faces = 0
+            int n_elems = 0
 
             int nfael_e
             list lnofa_e, lpofa_e
@@ -89,19 +88,32 @@ cdef class Interpolator:
             dict elem_type
             int type_index, i, j
 
-            DTYPE_I_t[::1] nfael       = np.ones(8, dtype=DTYPE_I) * -1
-            DTYPE_I_t[:, ::1] lnofa    = np.ones((8, 6), dtype=DTYPE_I) * -1
-            DTYPE_I_t[:, :, ::1] lpofa = np.ones((8, 6, 4), dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] npoel       = np.ones(NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[::1] nedel       = np.ones(8, dtype=DTYPE_I) * -1
-            DTYPE_I_t[:, :, ::1] lpoed = np.ones((8, 12, 2), dtype=DTYPE_I) * -1
-        
+            DTYPE_I_t[::1] nfael       = np.ones( NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+
+            DTYPE_I_t[:, ::1] lnofa    = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
+
+            DTYPE_I_t[:, :, ::1] lpofa = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NINPOL_MAX_FACES_PER_ELEMENT, 
+                                                  NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
+
+            DTYPE_I_t[::1] nedel       = np.ones( NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+
+            DTYPE_I_t[:, :, ::1] lpoed = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
+
+
         
         faces_key = "faces"
         if dim == 2:
             faces_key = "edges"
         
         for elem_type in self.point_ordering["elements"].values():
+            type_index = elem_type["element_type"]
+            npoel[type_index] = elem_type["number_of_points"]
+
             nfael_e = len(elem_type[faces_key] if faces_key in elem_type else [])
             lnofa_e = [len(face) for face in elem_type[faces_key]] if faces_key in elem_type else []
             lpofa_e = elem_type[faces_key] if faces_key in elem_type else []
@@ -109,10 +121,10 @@ cdef class Interpolator:
             npoed_e = len(elem_type["edges"] if "edges" in elem_type else [])
             lpoed_e = elem_type["edges"] if "edges" in elem_type else []
 
-            type_index = elem_type["element_type"]
+            
             
             nfael[type_index] = nfael_e
-            if faces_key in elem_type:
+            if "faces" in elem_type:
                 for i, n_point in enumerate(lnofa_e):
                     lnofa[type_index, i] = n_point
                     
@@ -130,11 +142,7 @@ cdef class Interpolator:
 
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
-            
             n_elems += len(CellBlock.data)
-            if faces_key in self.point_ordering["elements"][elem_type_str]:   
-                n_faces += len(CellBlock.data) * len(self.point_ordering["elements"][elem_type_str][faces_key])
-        
 
         cdef: 
             dict point_tag_to_index = {}
@@ -145,9 +153,8 @@ cdef class Interpolator:
 
             int elem_type_index
             
-            DTYPE_I_t[:, ::1] connectivity   = np.ones((n_elems, 8), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] connectivity   = np.ones((n_elems, NINPOL_MAX_POINTS_PER_ELEMENT), dtype=DTYPE_I) * -1
             DTYPE_I_t[::1] element_types     = np.ones(n_elems, dtype=DTYPE_I) * -1
-            DTYPE_I_t[::1] n_points_per_elem = np.ones(n_elems, dtype=DTYPE_I) * -1
         
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
@@ -157,13 +164,14 @@ cdef class Interpolator:
                 for j, point in enumerate(cell):
                     connectivity[cell_index, j] = point
                 element_types[cell_index] = elem_type_index
-                n_points_per_elem[cell_index] = len(cell)
                 cell_index += 1
 
-        return (dim, n_elems, n_points, n_faces, 
+        return (dim, 
+                n_elems, n_points, 
+                npoel,
                 nfael, lnofa, lpofa, 
                 nedel, lpoed,
-                connectivity, element_types, n_points_per_elem)
+                connectivity, element_types)
 
     
     def load_data(self, data_dict, data_type):
@@ -243,42 +251,28 @@ cdef class Interpolator:
     def load_point_data(self):
         self.load_data(self.mesh_obj.point_data, "points")
 
-    def interpolate(self, DTYPE_I_t[::1] target, str variable,  str method, str itype = "ctp"):
-        # Interpolates a 'variable' defined in the source (cells, if itype is "ctp", or points, if itype is "ctp") to the
-        # target (points, if itype is "ctp", or cells, if itype is "ptc") using the specified method.
+    def interpolate(self, DTYPE_I_t[::1] target, str variable,  str method):
         if not self.is_grid_initialized:
             raise ValueError("Grid not initialized. Please load a mesh first.")
         
         if method not in self.supported_methods:
             raise ValueError(f"Method '{method}' not supported. Supported methods are: {list(self.supported_methods.keys())}")
 
-        if itype not in ["ctp", "ptc"]:
-            raise ValueError(f"Invalid itype '{itype}'. Supported itypes are 'ptc' and 'ctp'.")
-        
-        if variable not in (self.variable_to_index["cells" if itype == "ctp" else "points"]):
-            raise ValueError(f"Variable '{variable}' not found in {itype} data.")
 
         cdef:
             int data_index = 0
             int data_dimension = 1
             DTYPE_F_t[::1] source_data = np.zeros(1, dtype=DTYPE_F)
-            str source_type = "cells" if itype == "ctp" else "points"
+            str source_type = "cells"
 
-        if itype == "ctp":
-            if variable not in self.variable_to_index["cells"]:
-                raise ValueError(f"Variable '{variable}' not found in cells data.")
+       
+        if variable not in self.variable_to_index["cells"]:
+            raise ValueError(f"Variable '{variable}' not found in cells data.")
 
-            data_index     = self.variable_to_index["cells"][variable]
-            source_data    = self.cells_data[data_index]
-            data_dimension = self.cells_data_dimensions[data_index]
+        data_index     = self.variable_to_index["cells"][variable]
+        source_data    = self.cells_data[data_index]
+        data_dimension = self.cells_data_dimensions[data_index]
 
-        if itype == "ptc":
-            if variable not in self.variable_to_index["points"]:
-                raise ValueError(f"Variable '{variable}' not found in points data.")
-
-            data_index     = self.variable_to_index["points"][variable]
-            source_data    = self.points_data[data_index]
-            data_dimension = self.points_data_dimensions[data_index]
         
         return np.asarray(self.supported_methods[method](source_data, data_dimension, source_type, target))
 
@@ -290,13 +284,13 @@ cdef class Interpolator:
         cdef:
             DTYPE_F_t[::1] interpolated_data = np.zeros(len(target) * data_dimension, dtype=DTYPE_F)
 
-        if source_type == "cells":
-            interpolated_data = distance_inverse(dim, target           = np.asarray(self.grid_obj.point_coords)[target], 
-                                                      source           = self.grid_obj.centroids,
-                                                      connectivity     = self.grid_obj.esup,
-                                                      connectivity_ptr = self.grid_obj.esup_ptr,
-                                                      weights_shape    = data_dimension,
-                                                      weights          = source_data
-                                                )
+        
+        interpolated_data = distance_inverse(dim, target           = np.asarray(self.grid_obj.point_coords)[target], 
+                                                  source           = self.grid_obj.centroids,
+                                                  connectivity     = self.grid_obj.esup,
+                                                  connectivity_ptr = self.grid_obj.esup_ptr,
+                                                  weights_shape    = data_dimension,
+                                                  weights          = source_data
+                                            )
         return interpolated_data
 

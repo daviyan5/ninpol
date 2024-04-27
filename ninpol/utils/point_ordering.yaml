@@ -7,21 +7,26 @@ elements:
   vertex:
     element_type: 0
     number_of_points: 1
+    edges: []
+    faces: []
 
   line:
     element_type: 1
     number_of_points: 2
     edges: [[0, 1]]
+    faces: []
 
   triangle:
     element_type: 2
     number_of_points: 3
     edges: [[0, 1], [1, 2], [2, 0]]
+    faces: []
   
   quad:
     element_type: 3
     number_of_points: 4
     edges: [[0, 1], [1, 2], [2, 3], [3, 0]]
+    faces: []
 
   tetra:
     element_type: 4

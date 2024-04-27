@@ -2,6 +2,7 @@
 This file contains the definition of the Interpolator class.
 """
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
+from .ninpol_defines cimport *
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
@@ -10,13 +11,11 @@ from cython.parallel cimport parallel, prange
 cimport openmp
 
 from .grid cimport Grid
+from .._methods.inv_dist cimport distance_inverse
 
 ctypedef cnp.int64_t DTYPE_I_t
 ctypedef cnp.float64_t DTYPE_F_t
 
-import meshio
-
-cdef type MeshioMesh = meshio._mesh.Mesh
 
 cdef class Interpolator:
 
@@ -28,7 +27,7 @@ cdef class Interpolator:
     
     cdef readonly dict variable_to_index
 
-    cdef readonly DTYPE_F_t[:, ::1] cells_data 
+    cdef readonly DTYPE_F_t[:, ::1] cells_data
     cdef readonly DTYPE_I_t[::1] cells_data_dimensions
 
     cdef readonly DTYPE_F_t[:, ::1] points_data

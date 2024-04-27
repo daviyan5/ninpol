@@ -1,4 +1,5 @@
 import os
+import sys
 import meshio
 import numpy as np
 import analytical
@@ -14,15 +15,22 @@ def calculate_properties(centroids, is_box=False):
 
     return linear, quadratic, quarter_five_spot
 
+def block_print():
+    sys.stdout = open(os.devnull, 'w')
+
+def enable_print():
+    sys.stdout = sys.__stdout__
 
 def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
 
     print("Processing file:", file_name)
 
+    block_print()
     # Read mesh file using meshio
     mesh = meshio.read(file_path)
     # Write in a temporary output directory
     meshio.write(temp_output_dir + "foo.vtk", mesh)
+    enable_print()
 
     # Read mesh file using meshio
     mesh = meshio.read(temp_output_dir + "foo.vtk")
@@ -65,8 +73,8 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
     meshio.write(output_file, mesh_out)
 
 # Define directories
-input_dir = "./pure"
-output_dir = "./altered"
+input_dir = "./pure_mesh"
+output_dir = "./altered_mesh"
 
 # Create output directory if it doesn't exist
 os.makedirs(output_dir, exist_ok=True)

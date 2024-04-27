@@ -2,5 +2,5 @@
 
 def pytest_addoption(parser):
     # Grid parameters
-    parser.addoption("--n-repeats", action="store", default=3, help="Number of Repeats")
-    parser.addoption("--inv_dist", action="store_true", help="Use inv_dist Spacing")
+    parser.addoption("--n-repeats", action="store", default=1, help="Number of Repeats")
+    parser.addoption("--n-files", action="store", default=-1, help="Number of Files")

@@ -2,12 +2,15 @@
 This file contains the "Grid" class definition, for mesh manipulation. 
 """
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
+from .ninpol_defines cimport *
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
+from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 
-ctypedef cnp.int64_t DTYPE_I_t
-ctypedef cnp.float64_t DTYPE_F_t
+ctypedef cnp.int64_t    DTYPE_I_t
+ctypedef cnp.float64_t  DTYPE_F_t
+
 
 
 cdef class Grid:
@@ -25,8 +28,10 @@ cdef class Grid:
         Number of points (vertices) that compose the mesh
     n_faces: int
         Number of faces that compose the mesh
-    n_points_per_elem : numpy.ndarray
-        Number of points per element
+    n_edges: int
+        Number of edges that compose the mesh
+    npoel : numpy.ndarray
+        Number of points per element type
 
     element_types : numpy.ndarray
         Array containing the type of each element. The type of the i-th element is given by element_types[i].
@@ -59,13 +64,21 @@ cdef class Grid:
         Description of the faces of each element type
         i.e : The faces of a tetrahedron are in lpofa[4, :, :]
 
+    inpofa: numpy.ndarray
+        Points that compose each face
+        i.e : The points that compose face i are in inpofa[i, :]
+        OBS: Due to the way the faces are defined, the points will be ordered following the order of ONE of the elements that share the face.
+        This means that lpofa should be used to get the correct order of the points.
+
     infael: numpy.ndarray
         Faces that compose each element
         i.e : The faces that compose element i are in infael[i, :])
         
     esufa: numpy.ndarray
         Elements surrounding faces
-        i.e : The elements surrounding face i are in esufa[i, :])
+    esufa_ptr: numpy.ndarray
+        Elements surrounding faces pointer
+        i.e : The elements surrounding face i are in esufa[esufa_ptr[i]:esufa_ptr[i+1]]
 
     esuel : numpy.ndarray
         Elements surrounding elements 
@@ -79,6 +92,12 @@ cdef class Grid:
         Description of the edges of each element type
         i.e : The edges of an element of type i are in lpoed[i, :, :]
 
+    inpoed: numpy.ndarray
+        Points that compose each edge
+        i.e : The points that compose edge i are in inpoed[i, :])
+        OBS: Due to the way the edges are defined, the points will be ordered following the order of ONE of the elements that share the edge.
+        This means that lpoed should be used to get the correct order of the points.
+
     inedel : numpy.ndarray
         Edges that compose each element
         i.e : The edges that compose element i are in edsuel[i, :])
@@ -89,17 +108,23 @@ cdef class Grid:
     cdef readonly int n_elems
     cdef readonly int n_points
     cdef readonly int n_faces
+    cdef readonly int n_edges
 
     cdef readonly int are_elements_loaded
     cdef readonly int are_coords_loaded
+    cdef readonly int are_structures_built
+    cdef readonly int are_centroids_calculated
+    
+    cdef readonly int MX_ELEMENTS_PER_POINTS
+    cdef readonly int MX_POINTS_PER_POINTS
+    cdef readonly int MX_ELEMENTS_PER_FACE
 
     cdef readonly DTYPE_F_t[:, ::1] point_coords
     cdef readonly DTYPE_F_t[:, ::1] centroids
     
-    cdef readonly DTYPE_I_t[::1] n_points_per_elem
-
     cdef readonly DTYPE_I_t[::1] element_types
 
+    cdef readonly DTYPE_I_t[::1] npoel
     cdef readonly DTYPE_I_t[:, ::1] inpoel
 
     cdef readonly DTYPE_I_t[::1] esup
@@ -112,14 +137,18 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[:, ::1] lnofa
     cdef readonly DTYPE_I_t[:, :, ::1] lpofa
 
+    cdef readonly DTYPE_I_t[:, ::1] inpofa
     cdef readonly DTYPE_I_t[:, ::1] infael
-    cdef readonly DTYPE_I_t[:, ::1] esufa
-    
+
+    cdef readonly DTYPE_I_t[::1] esufa
+    cdef readonly DTYPE_I_t[::1] esufa_ptr
+
     cdef readonly DTYPE_I_t[:, ::1] esuel
 
     cdef readonly DTYPE_I_t[::1] nedel
     cdef readonly DTYPE_I_t[:, :, ::1] lpoed
 
+    cdef readonly DTYPE_I_t[:, ::1] inpoed
     cdef readonly DTYPE_I_t[:, ::1] inedel
     
 
@@ -129,24 +158,11 @@ cdef class Grid:
             - Points surrounding each point     (psup)
             - Number of faces                   (n_faces)
             - Elements surrounding each element (esuel)
+            - ETC
 
         In the 3D case, the following data structures are also built:
             - Points that form each edge        (inpoed)
             - Edges that form each element      (ledel)
-
-        Parameters
-        ---------
-            connectivity : np.ndarray
-                Connectivity matrix. Each row contains the indices of the points that form an element.
-                The connectivity matrix shall be a 2D array of shape (n_elems, 8), such that
-                connectivity[i, :] contains the indices of the points that form the i-th element. 
-
-                Reference on the ordering may be found at 'utils/point_ordering.yaml'
-
-                THE COLUMNS WITH UNUSED POINTS SHALL BE FILLED WITH -1.
-            element_types : np.ndarray
-                Array containing the type of each element. The type of the i-th element is given by element_types[i].
-                The description relating the geometry and the element type is given by the 'point_ordering.yaml' file.
                 
         Notes
         -----
@@ -160,7 +176,7 @@ cdef class Grid:
             An Introduction Based on Finite Element Methods (2nd ed.). ISBN: 978-0-470-51907-3.
 
     """ 
-    cpdef void build(self, const DTYPE_I_t[:, ::1] connectivity, const DTYPE_I_t[::1] element_types, const DTYPE_I_t[::1] n_points_per_elem)
+    cpdef void build(self)
 
     """
         Builds the elements surrounding each point (esup) array.
@@ -180,8 +196,22 @@ cdef class Grid:
     """
     cdef void build_psup(self)
 
+    """
+        Builds the elements surrounding each face (esufa) array.
+
+        Notes
+        -----
+        Assumes that the "inpoed" array has been calculated.
+    """
     cdef void build_infael(self)
 
+    """
+        Builds the elements surrounding each face (esufa) array.
+
+        Notes
+        -----
+        Assumes that the "infael" array has been calculated.
+    """
     cdef void build_esufa(self)
 
     """
@@ -197,6 +227,6 @@ cdef class Grid:
 
     cdef void build_inedel(self)
     
-    cdef void load_point_coords(self, DTYPE_F_t[:, ::1] point_coords)
+    cdef void load_point_coords(self, const DTYPE_F_t[:, ::1] point_coords)
 
     cdef void calculate_cells_centroids(self)

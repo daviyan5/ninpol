@@ -13,3 +13,4 @@ cython_debug/*
 *.msh
 *.vtu
 *.npy
+*.log
