@@ -81,7 +81,7 @@ class TestAccuracy:
                         continue
                         
                     reference = function(points_coords)
-                    measure = np.asarray(interpolador.interpolate(points, name, method))
+                    measure = np.asarray(interpolador.interpolate(points, name, method, return_value=True))
                     norm = float(l2norm_relative(measure, reference))
                     
                     results_dict["files"][files[case]]["methods"][method]["error_" + name] = norm

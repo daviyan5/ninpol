@@ -4,49 +4,52 @@ from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from libc.stdio cimport printf
 from libc.math cimport sqrt
 
-cdef DTYPE_F_t[::1] distance_inverse(int dim, const DTYPE_F_t[:, ::1] target, const DTYPE_F_t[:, ::1] source, 
-                                     const DTYPE_I_t[::1] connectivity, const DTYPE_I_t[::1] connectivity_ptr,
-                                     int weights_shape, const DTYPE_F_t[::1] weights):
+cdef void distance_inverse(const int dim,
+                           const DTYPE_F_t[:, ::1] target_coordinates, 
+                           const DTYPE_F_t[:, ::1] source_coordinates,
+                           const DTYPE_I_t[:, ::1] connectivity_idx,
+                           DTYPE_F_t[:, ::1] weights):
     
-    cdef int n_target = target.shape[0]
-
-
-    cdef DTYPE_F_t[::1] result = np.zeros(n_target * weights_shape, dtype=np.float64)
+    cdef int n_target = target_coordinates.shape[0]
+    
     cdef:
         int i, j, k
         int source_idx, dest_idx
+        int n_source
+
         int zero_found
         DTYPE_F_t distance = 0.0, total_distance = 0.0
-        int use_threads = n_target > 1000
+        
         float machine_epsilon = 10 ** int(np.log10(np.finfo(np.float64).eps))
     
-    omp_set_num_threads(8 if use_threads else 1)
+    cdef int use_threads = min(8, np.ceil(n_target / 800))
+    omp_set_num_threads(use_threads)
     for dest_idx in prange(n_target, nogil=True, schedule='static', num_threads=8 if use_threads else 1):
-        total_distance = 0
         zero_found = False
-
-        for j in range(connectivity_ptr[dest_idx], connectivity_ptr[dest_idx+1]):
-            source_idx = connectivity[j]
+        total_distance = 0
+        n_source = 0
+        for j, source_idx in enumerate(connectivity_idx[dest_idx]):
+            if source_idx == -1:
+                break
+            
             distance = 0.0
             for k in range(dim):
-                distance = distance + (target[dest_idx, k] - source[source_idx, k])**2
+                distance = distance + (target_coordinates[dest_idx, k] - source_coordinates[source_idx, k])**2
             
             if distance <= machine_epsilon:
                 zero_found = True
-                for k in range(weights_shape):
-                    result[dest_idx * weights_shape + k] = weights[source_idx * weights_shape + k]
-                break 
+                for k in range(n_source):
+                    weights[dest_idx, k] = 0.
+                weights[dest_idx, j] = 1.
+                break
             distance = sqrt(distance)
-            for k in range(weights_shape):
-                result[dest_idx * weights_shape + k] += weights[source_idx * weights_shape + k] * (1 / distance)
-            total_distance = total_distance + 1 / distance
+
+            weights[dest_idx, j] += 1 / distance
+            total_distance += 1 / distance
+
+            n_source = n_source + 1
 
         if not zero_found:
-            for k in range(weights_shape):
-                result[dest_idx * weights_shape + k] /= total_distance
-        else:
-            zero_found = False
-        
-    
-    return result
-
+            for k in range(n_source):
+                weights[dest_idx, k] /= total_distance
+            

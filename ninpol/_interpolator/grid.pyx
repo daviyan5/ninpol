@@ -33,8 +33,8 @@ cdef class Grid:
         self.n_faces = 0
         self.n_edges = 0
 
-        self.MX_ELEMENTS_PER_POINTS = 0
-        self.MX_POINTS_PER_POINTS = 0
+        self.MX_ELEMENTS_PER_POINT = 0
+        self.MX_POINTS_PER_POINT = 0
         self.MX_ELEMENTS_PER_FACE = 0
 
         def _validate_shape(array, expected_shape):
@@ -113,6 +113,7 @@ cdef class Grid:
         self.build_inedel()
 
         self.are_structures_built = True
+    
     cdef void build_esup(self):
         
         cdef:
@@ -129,7 +130,7 @@ cdef class Grid:
             for j in range(self.npoel[elem_type]):
                 point = self.inpoel[i, j]
                 self.esup_ptr[point + 1] += 1
-                self.MX_ELEMENTS_PER_POINTS = max(self.MX_ELEMENTS_PER_POINTS, 
+                self.MX_ELEMENTS_PER_POINT = max(self.MX_ELEMENTS_PER_POINT, 
                                                   self.esup_ptr[point + 1])
         
         # Compute the cumulative sum of the number of elements surrounding each point
@@ -178,7 +179,7 @@ cdef class Grid:
                         stor_ptr += 1
                         
             self.psup_ptr[i+1] = stor_ptr
-            self.MX_POINTS_PER_POINTS = max(self.MX_POINTS_PER_POINTS,
+            self.MX_POINTS_PER_POINT = max(self.MX_POINTS_PER_POINT,
                                             self.psup_ptr[i + 1] - self.psup_ptr[i])
 
         # Resize the psup array to remove padding
@@ -466,8 +467,8 @@ cdef class Grid:
         cdef:
             int i, j
 
-            DTYPE_I_t[:, ::1] esup2d = np.ones((self.n_points, self.MX_ELEMENTS_PER_POINTS), dtype=DTYPE_I) * -1
-            DTYPE_I_t[:, ::1] psup2d = np.ones((self.n_points, self.MX_POINTS_PER_POINTS),   dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] esup2d = np.ones((self.n_points, self.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] psup2d = np.ones((self.n_points, self.MX_POINTS_PER_POINT),   dtype=DTYPE_I) * -1
             DTYPE_I_t[:, ::1] esufa2d = np.ones((self.n_faces, self.MX_ELEMENTS_PER_FACE),   dtype=DTYPE_I) * -1
 
         for i in range(self.n_points):
@@ -518,12 +519,12 @@ cdef class Grid:
         self.centroids = np.zeros((self.n_elems, self.n_dims), dtype=DTYPE_F)
         
         cdef:
-            int use_threads = self.n_elems > 1000
             float machine_epsilon = 10 ** int(np.log10(np.finfo(DTYPE_F).eps))
 
-        omp_set_num_threads(8 if use_threads else 1)
 
-        for i in prange(self.n_elems, nogil=True, schedule='static', num_threads=8 if use_threads else 1):
+        cdef int use_threads = min(8, np.ceil(self.n_elems / 800))
+        omp_set_num_threads(use_threads)
+        for i in prange(self.n_elems, nogil=True, schedule='static', num_threads=use_threads):
             elem_type = self.element_types[i]
             npoel_e = self.npoel[elem_type]
             for j in range(npoel_e):

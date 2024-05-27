@@ -90,7 +90,7 @@ class TestCorrectness:
             por_idx[value["element_type"]] = value
             por_idx[value["element_type"]]["name"] = key
 
-        TOTAL_TESTS = 9
+        TOTAL_TESTS = 10
         print("\n=======================================================================================")
         print(f"{Fore.WHITE}{'':<13}{'File':<15}{'Nº Points':<15}{'Nº Elements':<15}{'Nº Faces':<10}{'Nº Edges':<10}{'Nº Passed'}{Style.RESET_ALL}")
         for case in range(n_files):
@@ -239,7 +239,54 @@ class TestCorrectness:
                     assert np.allclose(centroid, centroids[i]), f"Centroid of an element doesn't match, err: {err}"
 
                 n_passed += 1
+            with subtests.test('Test "Weights" for Distance Inverse'):
+                # Interpolate 'linear' for all points and receive the weights matrix
+                weights, connectivity_vals = interpolador.interpolate(np.arange(n_points), "linear", "inv_dist")
 
+                # For every point, the sum of the weights should be 1
+                for i in range(n_points):
+                    assert np.isclose(np.sum(weights[i]), 1), "The sum of the weights should be 1"
+
+                # For every point, for every elem in esup of point 
+                #   connectivity_vals[point, j] = linear[esup[point, j]]
+                linear = interpolador.get_data("cells", np.arange(n_elements), "linear")
+
+                for i in range(n_points):
+                    for j in range(esup[i].shape[0]):
+                        if esup[i, j] == -1:
+                            continue
+                        assert np.isclose(connectivity_vals[i, j], linear[esup[i, j]]), "Connectivity values don't match the linear interpolation"
+
+                # For every point, for every elem in esup of point
+                #   weights[point, j] = 1 / distance(point, centroid(elem)) / total_distance
+
+                for i in range(n_points):
+                    total_dist = 0
+                    for j in range(esup[i].shape[0]):
+                        if esup[i, j] == -1:
+                            continue
+                        elem = esup[i, j]
+                        dist = np.linalg.norm(points_coords[i] - centroids[elem])
+                        if np.isclose(dist, np.finfo(float).eps):
+                            # Weight must be 1 if the distance is 0, and 0 everywhere else
+                            is_one = np.isclose(weights[i, j], 1)
+                            is_zero = np.allclose(weights[i, :j], 0) and np.allclose(weights[i, j+1:], 0)
+
+                            assert is_one and is_zero, "Weights don't match the distance inverse interpolation"
+                            found_zero = True
+                            break
+                        total_dist += dist
+                    if found_zero:
+                        continue
+                    for j in range(esup[i].shape[0]):
+                        if esup[i, j] == -1:
+                            continue
+                        elem = esup[i, j]
+                        dist = np.linalg.norm(points_coords[i] - centroids[elem])
+                        assert np.isclose(weights[i, j], 1 / (total_dist * dist)), "Weights don't match the distance inverse interpolation"
+
+                n_passed += 1
+                
             pstr = (f"{Fore.WHITE}{'':<4}{files[case]:<15}{Fore.BLUE}" + 
                     f"{n_points:<15}{n_elements:<15}{n_faces:<10}{n_edges:<10}" +
                     f"{Fore.GREEN if n_passed == TOTAL_TESTS else Fore.RED}{n_passed:<10}{Style.RESET_ALL}")
