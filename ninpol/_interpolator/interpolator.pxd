@@ -36,9 +36,9 @@ cdef class Interpolator:
 
     cdef readonly int is_grid_initialized
     
-    cdef DTYPE_F_t[::1] inv_dist_interpolator(self, const DTYPE_F_t[::1] source_data, 
-                                                  DTYPE_I_t data_dimension, str source_type, 
-                                                  const DTYPE_I_t[::1] target)
+    cdef tuple prepare_interpolator(self, str method, 
+                                    const DTYPE_F_t[::1] source_variable, const int data_dimension, 
+                                    const DTYPE_I_t[::1] target_points)
 
     
 

@@ -26,7 +26,7 @@ def load_process_build(interpolador, mesh_dir, filename):
     interpolador.load_mesh(os.path.join(mesh_dir, filename))
 
 def interpolate(interpolador, points):
-    interpolador.interpolate(points, "quarter_five_spot", "inv_dist")
+    interpolador.interpolate(points, "quarter_five_spot", "inv_dist", return_value=True)
 
 def l2norm_relative(measure, reference):
     sqr_sum = np.sum(reference ** 2)
