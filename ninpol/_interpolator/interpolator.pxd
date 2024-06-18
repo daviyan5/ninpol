@@ -12,6 +12,7 @@ cimport openmp
 
 from .grid cimport Grid
 from .._methods.inv_dist cimport distance_inverse
+from .._methods.gls cimport GLS
 
 ctypedef cnp.int64_t DTYPE_I_t
 ctypedef cnp.float64_t DTYPE_F_t
@@ -21,6 +22,7 @@ cdef class Interpolator:
 
     cdef readonly dict point_ordering
     cdef readonly dict supported_methods
+    cdef readonly dict types_per_dimension
 
     cdef readonly object mesh_obj
     cdef readonly Grid grid_obj
@@ -35,9 +37,11 @@ cdef class Interpolator:
      
 
     cdef readonly int is_grid_initialized
-    
+
+    cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability)
+
     cdef tuple prepare_interpolator(self, str method, 
-                                    const DTYPE_F_t[::1] source_variable, const int data_dimension, 
+                                    const int data_dimension, 
                                     const DTYPE_I_t[::1] target_points)
 
     

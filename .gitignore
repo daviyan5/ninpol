@@ -14,3 +14,6 @@ cython_debug/*
 *.vtu
 *.npy
 *.log
+ninpol.egg-info/*
+.pytest_cache/*
+.vscode/*

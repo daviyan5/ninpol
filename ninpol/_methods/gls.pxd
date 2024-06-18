@@ -6,5 +6,10 @@ cnp.import_array()                  # Needed to use NumPy C API
 ctypedef cnp.int64_t DTYPE_I_t
 ctypedef cnp.float64_t DTYPE_F_t
 
+from .._interpolator.grid cimport Grid
 
-cdef void GLS()
+cdef void GLS( Grid grid, 
+               const DTYPE_I_t[::1] in_points, const DTYPE_I_t[::1] nm_points, 
+               const DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
+               DTYPE_I_t[:, ::1] connectivity_idx,
+               DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)

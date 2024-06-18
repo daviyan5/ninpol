@@ -46,6 +46,12 @@ cdef class Grid:
         Elements surrounding points pointer. 
         i.e: The elements surrounding point i are in esup[esup_ptr[i]:esup_ptr[i+1]]
 
+    fsup: numpy.ndarray
+        Faces surrounding points
+    fsup_ptr: numpy.ndarray
+        Faces surrounding points pointer
+        i.e : The faces surrounding point i are in fsup[fsup_ptr[i]:fsup_ptr[i+1]]
+
     psup : numpy.ndarray
         Points surrounding points connectivity
     psup_ptr : numpy.ndarray
@@ -74,11 +80,11 @@ cdef class Grid:
         Faces that compose each element
         i.e : The faces that compose element i are in infael[i, :])
         
-    esufa: numpy.ndarray
+    esuf: numpy.ndarray
         Elements surrounding faces
-    esufa_ptr: numpy.ndarray
+    esuf_ptr: numpy.ndarray
         Elements surrounding faces pointer
-        i.e : The elements surrounding face i are in esufa[esufa_ptr[i]:esufa_ptr[i+1]]
+        i.e : The elements surrounding face i are in esuf[esuf_ptr[i]:esuf_ptr[i+1]]
 
     esuel : numpy.ndarray
         Elements surrounding elements 
@@ -103,7 +109,7 @@ cdef class Grid:
         i.e : The edges that compose element i are in edsuel[i, :])
 
     """
-    cdef readonly int n_dims
+    cdef readonly int dim
 
     cdef readonly int n_elems
     cdef readonly int n_points
@@ -114,13 +120,21 @@ cdef class Grid:
     cdef readonly int are_coords_loaded
     cdef readonly int are_structures_built
     cdef readonly int are_centroids_calculated
+    cdef readonly int are_normals_calculated
     
-    cdef readonly int MX_ELEMENTS_PER_POINTS
-    cdef readonly int MX_POINTS_PER_POINTS
+    cdef readonly int MX_ELEMENTS_PER_POINT
+    cdef readonly int MX_POINTS_PER_POINT
     cdef readonly int MX_ELEMENTS_PER_FACE
+    cdef readonly int MX_FACES_PER_POINT
+    
 
     cdef readonly DTYPE_F_t[:, ::1] point_coords
     cdef readonly DTYPE_F_t[:, ::1] centroids
+    cdef readonly DTYPE_F_t[:, ::1] normal_faces
+    
+    cdef readonly DTYPE_I_t[::1] boundary_faces
+
+    cdef readonly DTYPE_I_t[::1] boundary_points
     
     cdef readonly DTYPE_I_t[::1] element_types
 
@@ -132,7 +146,10 @@ cdef class Grid:
 
     cdef readonly DTYPE_I_t[::1] psup
     cdef readonly DTYPE_I_t[::1] psup_ptr
-    
+
+    cdef readonly DTYPE_I_t[::1] fsup
+    cdef readonly DTYPE_I_t[::1] fsup_ptr
+
     cdef readonly DTYPE_I_t[::1] nfael
     cdef readonly DTYPE_I_t[:, ::1] lnofa
     cdef readonly DTYPE_I_t[:, :, ::1] lpofa
@@ -140,8 +157,8 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[:, ::1] inpofa
     cdef readonly DTYPE_I_t[:, ::1] infael
 
-    cdef readonly DTYPE_I_t[::1] esufa
-    cdef readonly DTYPE_I_t[::1] esufa_ptr
+    cdef readonly DTYPE_I_t[::1] esuf
+    cdef readonly DTYPE_I_t[::1] esuf_ptr
 
     cdef readonly DTYPE_I_t[:, ::1] esuel
 
@@ -197,7 +214,7 @@ cdef class Grid:
     cdef void build_psup(self)
 
     """
-        Builds the elements surrounding each face (esufa) array.
+        Builds the elements surrounding each face (esuf) array.
 
         Notes
         -----
@@ -206,13 +223,22 @@ cdef class Grid:
     cdef void build_infael(self)
 
     """
-        Builds the elements surrounding each face (esufa) array.
+        Builds the faces surrounding each point (fsup) array.
 
         Notes
         -----
         Assumes that the "infael" array has been calculated.
     """
-    cdef void build_esufa(self)
+    cdef void build_fsup(self)
+
+    """
+        Builds the elements surrounding each face (esuf) array.
+
+        Notes
+        -----
+        Assumes that the "infael" array has been calculated.
+    """
+    cdef void build_esuf(self)
 
     """
         Builds the elements surrounding each element (esuel) array. 
@@ -230,3 +256,5 @@ cdef class Grid:
     cdef void load_point_coords(self, const DTYPE_F_t[:, ::1] point_coords)
 
     cdef void calculate_cells_centroids(self)
+
+    cdef void calculate_normal_faces(self)

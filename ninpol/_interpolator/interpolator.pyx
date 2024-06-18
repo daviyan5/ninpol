@@ -14,7 +14,7 @@ DTYPE_F = np.float64
 
 cdef class Interpolator:
 
-    def __cinit__(self):
+    def __cinit__(self, str filename = ""):
         # Load point-ordering.yaml 
         import yaml
         import os
@@ -31,17 +31,28 @@ cdef class Interpolator:
         self.is_grid_initialized = False
 
         self.supported_methods = {
-            "inv_dist": distance_inverse
+            "inv_dist": distance_inverse,
+            "gls": GLS
         }
 
         self.variable_to_index = {
             "points": {},
             "cells": {}
         }
+
+        self.types_per_dimension = {
+            0: ["vertex"],
+            1: ["line"],
+            2: ["triangle", "quad"],
+            3: ["tetra", "hexahedron", "wedge", "pyramid"]
+        }
         self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
         self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
+        if filename != "":
+            self.load_mesh(filename)
     
     def load_mesh(self, str filename = ""):
         if filename == "":
@@ -58,6 +69,7 @@ cdef class Interpolator:
         
         self.grid_obj.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
         self.grid_obj.calculate_cells_centroids()
+        self.grid_obj.calculate_normal_faces()
        
         if self.mesh_obj.cell_data:
             self.load_cell_data()
@@ -114,9 +126,12 @@ cdef class Interpolator:
         if dim == 2:
             faces_key = "edges"
         
-        for elem_type in self.point_ordering["elements"].values():
+        for elem_type_str, elem_type in self.point_ordering["elements"].items():
             type_index = elem_type["element_type"]
             npoel[type_index] = elem_type["number_of_points"]
+            
+            if elem_type_str not in self.types_per_dimension[dim]:
+                continue
 
             nfael_e = len(elem_type[faces_key] if faces_key in elem_type else [])
             lnofa_e = [len(face) for face in elem_type[faces_key]] if faces_key in elem_type else []
@@ -146,6 +161,8 @@ cdef class Interpolator:
 
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
+            if elem_type_str not in self.types_per_dimension[dim]:
+                continue
             n_elems += len(CellBlock.data)
 
         cdef: 
@@ -162,9 +179,15 @@ cdef class Interpolator:
         
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
+
+            if elem_type_str not in self.types_per_dimension[dim]:
+                continue
+            
             elem_type_index = self.point_ordering["elements"][elem_type_str]["element_type"]
 
             for i, cell in enumerate(CellBlock.data):
+                # Sort cell points according to the following point ordering:
+                # 1 - x-axis increasing
                 for j, point in enumerate(cell):
                     connectivity[cell_index, j] = point
                 element_types[cell_index] = elem_type_index
@@ -236,24 +259,39 @@ cdef class Interpolator:
         # cell_data_dict will save each variable separately for element type. We dont want that.
         
         cdef:
-            dict cell_data_dict = self.mesh_obj.cell_data
+            int dim = self.grid_obj.dim
+            dict cell_data_dict = self.mesh_obj.cell_data_dict
+            dict cell_data = {}
             str variable
-            cnp.ndarray element_type
+            str element_type
             list aux_array  
-            int index, elem
+            int elem
 
         for variable in cell_data_dict:
             aux_array = []
-            index = 0
             for element_type in cell_data_dict[variable]:
-                aux_array.extend(element_type)
+                if element_type not in self.types_per_dimension[dim]:
+                    continue
+                aux_array.extend(cell_data_dict[variable][element_type])    # Works because the cells are (should be) indexed in order
 
-            cell_data_dict[variable] = np.array(aux_array)
+            cell_data[variable] = np.array(aux_array)
+            if variable == "permeability":
+                cell_data["diff_mag"] = self.compute_diffusion_magnitude(cell_data["permeability"])
 
-        self.load_data(cell_data_dict, "cells")
+        self.load_data(cell_data, "cells")
 
     def load_point_data(self):
         self.load_data(self.mesh_obj.point_data, "points")
+
+    cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability):
+        cdef:
+            nvols = len(permeability)
+            DTYPE_F_t[:, :, ::1] Ks = np.reshape(permeability, (nvols, 3, 3))                                    
+            cnp.ndarray detKs = np.linalg.det(Ks)                                                          
+            cnp.ndarray trKs  = np.trace(Ks, axis1=1, axis2=2)                                                   
+            DTYPE_F_t[::1] diff_mag = (1 - (3 * (detKs ** (1 / 3)) / trKs)) ** 2      
+
+        return diff_mag   
 
     def get_data(self, str data_type, DTYPE_I_t[::1] index, str variable):
         cdef int data_index = 0
@@ -268,7 +306,7 @@ cdef class Interpolator:
             data_index = self.variable_to_index["points"][variable]
             return np.asarray(self.points_data[data_index])[index]
 
-    def interpolate(self, DTYPE_I_t[::1] target_points, str variable,  str method, int return_value = False):
+    def interpolate(self, str variable,  str method, int return_value = False, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
         
         if not self.is_grid_initialized:
             raise ValueError("Grid not initialized. Please load a mesh first.")
@@ -276,6 +314,8 @@ cdef class Interpolator:
         if method not in self.supported_methods:
             raise ValueError(f"Method '{method}' not supported. Supported methods are: {list(self.supported_methods.keys())}")
 
+        if len(target_points) == 0:
+            target_points = np.arange(self.grid_obj.n_points, dtype=DTYPE_I)
 
         cdef:
             int data_index = 0
@@ -291,74 +331,84 @@ cdef class Interpolator:
         source_data    = self.cells_data[data_index]
         data_dimension = self.cells_data_dimensions[data_index]
         
-        cdef DTYPE_F_t[:, ::1] weights, connectivity_val, connectivity_idx
+        cdef: 
+            DTYPE_F_t[:, ::1] weights 
+            DTYPE_I_t[:, ::1] connectivity_idx
 
         # The value of the interpolation is the product of the lines of the 
         # weight matrix with the lines of the connectivity matrix, and the sum of the results for each line
-        weights, connectivity_idx, connectivity_val = self.prepare_interpolator(method, source_data, data_dimension, target_points)
+        weights, connectivity_idx = self.prepare_interpolator(method, data_dimension, target_points)
+        
+        cdef:
+            int i, j, k
+            DTYPE_F_t[:, ::1] result = np.zeros((len(target_points), data_dimension), dtype=DTYPE_F)
+            int n_target = len(target_points)
+            int n_elems = self.grid_obj.n_elems * data_dimension
+            int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
+            int index, elem
 
+            DTYPE_I_t[::1] rows = np.zeros(n_target * n_columns, dtype=DTYPE_I)
+            DTYPE_I_t[::1] cols = np.zeros(n_target * n_columns, dtype=DTYPE_I)   
+            DTYPE_F_t[::1] data = np.zeros(n_target * n_columns, dtype=DTYPE_F)         
+            int use_threads = min(8, np.ceil(n_target / 800))
+
+            int MX_ELEMENTS_PER_POINT = self.grid_obj.MX_ELEMENTS_PER_POINT
 
         if return_value:
-            # Multiply the weights by the connectivity, element-wise, and sum
-            cdef:
-                int i
-                DTYPE_F_t[:, ::1] unsummed_result = np.multiply(weights, connectivity_val)
-                DTYPE_F_t[:, ::1] result = np.zeros((len(target_points), data_dimension), dtype=DTYPE_F)
-                
-            for i in range(data_dimension):
-                result[:, i] = np.sum(unsummed_result[:, i::data_dimension], axis=1)
+            # Multiply the weights by the connectivity, element-wise, and sum  
+            for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
+                for k in range(data_dimension):
+                    for j in range(self.grid_obj.MX_ELEMENTS_PER_POINT):
+                        index = i * n_columns + j * data_dimension + k
+                        elem = connectivity_idx[i, j]
+                        if elem == -1:
+                            continue
+                        result[i, k] += weights[i, j] * source_data[elem * data_dimension + k]
 
             # Remove unnecessary dimensions
             return np.squeeze(result)
 
         else:
             # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
-            cdef:
-                int n_target = len(target_points)
-                int n_elems = self.grid_obj.n_elems * data_dimension
-                int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
-                int i, j, k
-                int index
-
-                DTYPE_I_t[::1] rows = np.zeros(n_target * n_columns, dtype=DTYPE_I)
-                DTYPE_I_t[::1] cols = np.zeros(n_target * n_columns, dtype=DTYPE_I)   
-                DTYPE_F_t[::1] data = np.zeros(n_target * n_columns, dtype=DTYPE_F)         
-                int use_threads = min(8, np.ceil(n_target / 800))
-
             omp_set_num_threads(use_threads)
             for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
-                for j in range(self.grid_obj.MX_ELEMENTS_PER_POINT):
+                for j in range(MX_ELEMENTS_PER_POINT):
                     for k in range(data_dimension):
                         index = i * n_columns + j * data_dimension + k
+                        if connectivity_idx[i, j] == -1:
+                            continue
                         rows[index] = i
                         cols[index] = connectivity_idx[i, j] * data_dimension + k
                         data[index] = weights[i, j * data_dimension + k]
             
-            cdef:
-                sp.csr_matrix weights_sparse = sp.csr_matrix((data, (rows, cols)), shape=(n_target, n_elems))
+            weights_sparse = sp.csr_matrix((data, (rows, cols)), shape=(n_target, n_elems))
             return weights_sparse
 
     cdef tuple prepare_interpolator(self, str method, 
-                                   const DTYPE_F_t[::1] source_variable, const int data_dimension, 
-                                   const DTYPE_I_t[::1] target_points):
+                                    const int data_dimension, 
+                                    const DTYPE_I_t[::1] target_points):
         
         
-        cdef int n_target = len(target_points)
-        cdef int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
-        cdef int dim = self.grid_obj.n_dims
+        cdef: 
+            int n_target = len(target_points)
+            int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
+            int dim = self.grid_obj.dim
 
-        cdef DTYPE_F_t[:, ::1] connectivity_val  = np.zeros((n_target, n_columns), dtype=DTYPE_F)
-        cdef DTYPE_I_t[:, ::1] connectivity_idx  = np.ones((n_target, self.grid_obj.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
-        cdef DTYPE_F_t[:, ::1] weights           = np.zeros((n_target, n_columns), dtype=DTYPE_F)
+            DTYPE_I_t[:, ::1] connectivity_idx  = np.ones((n_target, self.grid_obj.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
+            DTYPE_F_t[:, ::1] weights           = np.zeros((n_target, n_columns), dtype=DTYPE_F)
 
-        cdef DTYPE_F_t[:, ::1] target_coordinates = np.asarray(self.grid_obj.point_coords)[target_points]
-        cdef DTYPE_F_t[:, ::1] source_coordinates = self.grid_obj.centroids 
+            DTYPE_F_t[:, ::1] target_coordinates = np.asarray(self.grid_obj.point_coords)[target_points]
+            DTYPE_F_t[:, ::1] source_coordinates = self.grid_obj.centroids 
 
-        cdef int point, elem, first, last, i, j, k
+            int point, elem, first, last, i, j, k
+            int use_threads = min(8, np.ceil(n_target / 800))
+
+            DTYPE_I_t[::1] in_points, nm_points
+            DTYPE_F_t[:, :, ::1] permeability = np.zeros((self.grid_obj.n_elems, dim, dim), dtype=DTYPE_F)
+            DTYPE_F_t[::1] diff_mag     = np.zeros(self.grid_obj.n_elems, dtype=DTYPE_F)
+            DTYPE_F_t[::1] neumann_ws = np.zeros(n_target, dtype=DTYPE_F)
 
         # Populate connectivity_val
-        cdef int use_threads = min(8, np.ceil(n_target / 800))
-
         omp_set_num_threads(use_threads)
         for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
             point = target_points[i]
@@ -366,19 +416,34 @@ cdef class Interpolator:
             last = self.grid_obj.esup_ptr[point + 1]
             for j, elem in enumerate(self.grid_obj.esup[first:last]):
                 connectivity_idx[i, j] = elem
-                for k in range(data_dimension):
-                    connectivity_val[i, j * data_dimension + k] = source_variable[elem * data_dimension + k]
-        
+
+        if method == "gls":
+            in_points     = np.where(np.asarray(self.grid_obj.boundary_points) == 0)[0]
+            nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
+            nm_index      = self.variable_to_index["points"]["neumann"]
+
+            nm_points     = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
+
+            permeability  = np.reshape(self.cells_data[self.variable_to_index["cells"]["permeability"]], 
+                                      (self.grid_obj.n_elems, dim, dim))
+
+            diff_mag      = self.cells_data[self.variable_to_index["cells"]["diff_mag"]]
+
+            self.supported_methods[method](
+                self.grid_obj, 
+                in_points, nm_points,
+                permeability, diff_mag,
+                connectivity_idx,
+                weights, neumann_ws
+            )
+
         if method == "inv_dist":
-            
-            
             self.supported_methods[method](
                 dim,
                 target_coordinates, source_coordinates, 
-                data_dimension,
-                connectivity_idx, weights   
+                connectivity_idx, weights
             )
         
-        return weights, connectivity_idx, connectivity_val
+        return weights, connectivity_idx
 
 

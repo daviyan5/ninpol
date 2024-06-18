@@ -2,30 +2,34 @@
 This file contains the "Grid" class implementation
 """
 
+cimport openmp
+
 import numpy as np
 
 from cython.parallel import prange
+from libc.math cimport sqrt
+from libc.stdio cimport printf
 
 cdef:
     type DTYPE_I = np.int64
     type DTYPE_F = np.float64
 
 cdef class Grid:
-    def __cinit__(self, DTYPE_I_t n_dims, 
+    def __cinit__(self, DTYPE_I_t dim, 
                         DTYPE_I_t n_elems, DTYPE_I_t n_points, 
                         DTYPE_I_t[::1] npoel,
                         DTYPE_I_t[::1] nfael, DTYPE_I_t[:, ::1] lnofa, DTYPE_I_t[:, :, ::1] lpofa, 
                         DTYPE_I_t[::1] nedel, DTYPE_I_t[:, :, ::1] lpoed,
                         DTYPE_I_t[:, ::1] connectivity, DTYPE_I_t[::1] element_types):
 
-        if n_dims < 1:
+        if dim < 1:
             raise ValueError("The number of dimensions must be greater than 0.")
         if n_elems < 1:
             raise ValueError("The number of elements must be greater than 0.")
         if n_points < 1:
             raise ValueError("The number of points must be greater than 0.")
 
-        self.n_dims   = n_dims
+        self.dim   = dim
 
         self.n_elems  = n_elems
         self.n_points = n_points
@@ -36,6 +40,7 @@ cdef class Grid:
         self.MX_ELEMENTS_PER_POINT = 0
         self.MX_POINTS_PER_POINT = 0
         self.MX_ELEMENTS_PER_FACE = 0
+        self.MX_FACES_PER_POINT = 0
 
         def _validate_shape(array, expected_shape):
             if array.shape != expected_shape:
@@ -67,30 +72,35 @@ cdef class Grid:
         self.are_coords_loaded        = False
         self.are_structures_built     = False
         self.are_centroids_calculated = False
+        self.are_normals_calculated   = False
 
-        
+        self.boundary_faces  = np.zeros(0, dtype=DTYPE_I)
+        self.boundary_points = np.zeros(0, dtype=DTYPE_I)
         # Set every other member memory_slice to zero
-        self.esup               = np.zeros(0,       dtype=DTYPE_I)
-        self.esup_ptr           = np.zeros(0,       dtype=DTYPE_I)
+        self.esup         = np.zeros(0,       dtype=DTYPE_I)
+        self.esup_ptr     = np.zeros(0,       dtype=DTYPE_I)
 
-        self.psup               = np.zeros(0,       dtype=DTYPE_I)
-        self.psup_ptr           = np.zeros(0,       dtype=DTYPE_I)
+        self.psup         = np.zeros(0,       dtype=DTYPE_I)
+        self.psup_ptr     = np.zeros(0,       dtype=DTYPE_I)
 
-        self.inpofa             = np.zeros((0, 0),  dtype=DTYPE_I)
-        self.infael             = np.zeros((0, 0),  dtype=DTYPE_I)
+        self.inpofa       = np.zeros((0, 0),  dtype=DTYPE_I)
+        self.infael       = np.zeros((0, 0),  dtype=DTYPE_I)
 
-        self.esufa              = np.zeros(0,       dtype=DTYPE_I)
-        self.esufa_ptr          = np.zeros(0,       dtype=DTYPE_I)
+        self.esuf         = np.zeros(0,       dtype=DTYPE_I)
+        self.esuf_ptr     = np.zeros(0,       dtype=DTYPE_I)
 
-        self.esuel              = np.zeros((0, 0),  dtype=DTYPE_I)
+        self.fsup         = np.zeros(0,       dtype=DTYPE_I)
+        self.fsup_ptr     = np.zeros(0,       dtype=DTYPE_I)
+
+        self.esuel        = np.zeros((0, 0),  dtype=DTYPE_I)
         
-        self.inpoed             = np.zeros((0, 0),  dtype=DTYPE_I)
-        self.inedel             = np.zeros((0, 0),  dtype=DTYPE_I)
+        self.inpoed       = np.zeros((0, 0),  dtype=DTYPE_I)
+        self.inedel       = np.zeros((0, 0),  dtype=DTYPE_I)
 
-        self.point_coords       = np.zeros((0, 0),  dtype=DTYPE_F)
-        self.centroids          = np.zeros((0, 0),  dtype=DTYPE_F)
+        self.point_coords = np.zeros((0, 0),  dtype=DTYPE_F)
+        self.centroids    = np.zeros((0, 0),  dtype=DTYPE_F)
 
-
+        self.normal_faces = np.zeros((0, 0),  dtype=DTYPE_F)
 
     cpdef void build(self):
         
@@ -103,8 +113,11 @@ cdef class Grid:
         # Calculate the faces composing each element
         self.build_infael()
         
+        # Calculate the faces surrounding each point
+        self.build_fsup()
+
         # Calculate the elements surrounding each face
-        self.build_esufa()
+        self.build_esuf()
         
         # Calculate the elements surrounding each element
         self.build_esuel()
@@ -184,7 +197,7 @@ cdef class Grid:
 
         # Resize the psup array to remove padding
         self.psup = self.psup[:stor_ptr]
-    
+
     cdef void build_infael(self):
         cdef:
             int i, j, k
@@ -248,7 +261,41 @@ cdef class Grid:
         self.n_faces = current_face_index
         self.inpofa = self.inpofa[:self.n_faces]
     
-    cdef void build_esufa(self):
+    cdef void build_fsup(self):
+            
+        cdef:
+            int i, j, k
+            int elem_type
+            int point
+
+        self.fsup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
+
+        for i in range(self.n_faces):
+            for j in range(NINPOL_MAX_POINTS_PER_FACE):
+                if self.inpofa[i, j] == -1:
+                    break
+                point = self.inpofa[i, j]
+                self.fsup_ptr[point + 1] += 1
+                self.MX_FACES_PER_POINT = max(self.MX_FACES_PER_POINT, 
+                                              self.fsup_ptr[point + 1])
+
+        for i in range(self.n_points):
+            self.fsup_ptr[i + 1] += self.fsup_ptr[i]
+
+        self.fsup = np.zeros(self.fsup_ptr[self.n_points], dtype=DTYPE_I)
+        for i in range(self.n_faces):
+            for j in range(NINPOL_MAX_POINTS_PER_FACE):
+                if self.inpofa[i, j] == -1:
+                    break
+                point = self.inpofa[i, j]
+                self.fsup[self.fsup_ptr[point]] = i
+                self.fsup_ptr[point] += 1
+        
+        for i in range(self.n_points, 0, -1):
+            self.fsup_ptr[i] = self.fsup_ptr[i-1]
+        self.fsup_ptr[0] = 0
+
+    cdef void build_esuf(self):
 
         # Same logic as esup
         cdef:
@@ -257,33 +304,50 @@ cdef class Grid:
             int face
 
 
-        self.esufa_ptr = np.zeros(self.n_faces + 1, dtype=DTYPE_I)
+        self.esuf_ptr = np.zeros(self.n_faces + 1, dtype=DTYPE_I)
 
-        # Count the number of faces surrounding each point 
+        # Count the number of elements surrounding each face 
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             for j in range(self.nfael[elem_type]):
                 face = self.infael[i, j]
-                self.esufa_ptr[face + 1] += 1
+                self.esuf_ptr[face + 1] += 1
                 self.MX_ELEMENTS_PER_FACE = max(self.MX_ELEMENTS_PER_FACE, 
-                                                self.esufa_ptr[face + 1])
+                                                self.esuf_ptr[face + 1])
 
-        # Compute the cumulative sum of the number of faces surrounding each point
+        # Compute the cumulative sum of the number of elements surrounding each face
         for i in range(self.n_faces):
-            self.esufa_ptr[i + 1] += self.esufa_ptr[i]
+            self.esuf_ptr[i + 1] += self.esuf_ptr[i]
         
-        # Fill the esufa array
-        self.esufa = np.zeros((self.esufa_ptr[self.n_faces]), dtype=DTYPE_I)
+        # Fill the esuf array
+        self.esuf = np.zeros((self.esuf_ptr[self.n_faces]), dtype=DTYPE_I)
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             for j in range(self.nfael[elem_type]):
                 face = self.infael[i, j]
-                self.esufa[self.esufa_ptr[face]] = i
-                self.esufa_ptr[face] += 1
+                self.esuf[self.esuf_ptr[face]] = i
+                self.esuf_ptr[face] += 1
 
         for i in range(self.n_faces, 0, -1):
-            self.esufa_ptr[i] = self.esufa_ptr[i-1]
-        self.esufa_ptr[0] = 0
+            self.esuf_ptr[i] = self.esuf_ptr[i-1]
+        self.esuf_ptr[0] = 0
+
+        cdef:
+            int num_threads = min(8, np.ceil(self.n_faces / 800))
+        
+        self.boundary_faces = np.zeros(self.n_faces, dtype=DTYPE_I)
+        self.boundary_points = np.zeros(self.n_points, dtype=DTYPE_I)
+        
+        omp_set_num_threads(num_threads)
+        for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=num_threads):
+            if self.esuf_ptr[i + 1] - self.esuf_ptr[i] == 1:
+                self.boundary_faces[i] = True
+                for j in self.inpofa[i]:
+                    if j == -1:
+                        break
+                    self.boundary_points[j] = True
+
+        
 
 
     cdef void build_esuel(self):
@@ -469,7 +533,7 @@ cdef class Grid:
 
             DTYPE_I_t[:, ::1] esup2d = np.ones((self.n_points, self.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
             DTYPE_I_t[:, ::1] psup2d = np.ones((self.n_points, self.MX_POINTS_PER_POINT),   dtype=DTYPE_I) * -1
-            DTYPE_I_t[:, ::1] esufa2d = np.ones((self.n_faces, self.MX_ELEMENTS_PER_FACE),   dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] esuf2d = np.ones((self.n_faces, self.MX_ELEMENTS_PER_FACE),   dtype=DTYPE_I) * -1
 
         for i in range(self.n_points):
             for j in range(self.esup_ptr[i], self.esup_ptr[i+1]):
@@ -479,12 +543,12 @@ cdef class Grid:
                 psup2d[i, j - self.psup_ptr[i]] = self.psup[j]
         
         for i in range(self.n_faces):
-            for j in range(self.esufa_ptr[i], self.esufa_ptr[i+1]):
-                esufa2d[i, j - self.esufa_ptr[i]] = self.esufa[j]
+            for j in range(self.esuf_ptr[i], self.esuf_ptr[i+1]):
+                esuf2d[i, j - self.esuf_ptr[i]] = self.esuf[j]
 
         data['esup']    = esup2d.copy()
         data['psup']    = psup2d.copy()
-        data['esufa']   = esufa2d.copy()
+        data['esuf']   = esuf2d.copy()
 
         for key in data:
             data[key] = np.asarray(data[key])
@@ -508,7 +572,7 @@ cdef class Grid:
         #           2. Calculate the contribuitions of each face to the volume and centroid
         # This can be done by using an array 'triangles' for each face, such that triangles[i] = [[a1, b1, c1], [a2, b2, c2], ...]
         # that triangulate that face. If the face is already a triangle, then triangles[i] = [[a, b, c]]
-        # Then, using esufa, we can calculate the volume and centroid of each element
+        # Then, using esuf, we can calculate the volume and centroid of each element
 
         # However, for now, we will use only the average of the points
 
@@ -516,7 +580,7 @@ cdef class Grid:
             int i, j, k
             int elem_type
             int npoel_e
-        self.centroids = np.zeros((self.n_elems, self.n_dims), dtype=DTYPE_F)
+        self.centroids = np.zeros((self.n_elems, self.dim), dtype=DTYPE_F)
         
         cdef:
             float machine_epsilon = 10 ** int(np.log10(np.finfo(DTYPE_F).eps))
@@ -528,8 +592,49 @@ cdef class Grid:
             elem_type = self.element_types[i]
             npoel_e = self.npoel[elem_type]
             for j in range(npoel_e):
-                for k in range(self.n_dims):
+                for k in range(self.dim):
                     self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k] / npoel_e
 
         self.are_centroids_calculated = True
-        
+
+    cdef void calculate_normal_faces(self):
+        # For each face, select the 3 first points and calculate the normal to the face.
+        # Then, normalize it
+
+        self.normal_faces = np.zeros((self.n_faces, self.dim), dtype=DTYPE_F)
+        cdef:
+            int i, j, k
+            int face
+            int point1 = 0, point2 = 0, point3 = 0
+
+            float v1x, v1y, v1z, v2x, v2y, v2z
+            float normalx, normaly, normalz
+
+            float norm = 0.0
+            int use_threads = min(8, np.ceil(self.n_faces / 800))
+        omp_set_num_threads(use_threads)
+        for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
+        #for face in range(self.n_faces):
+            point1 = self.inpofa[face, 0]
+            point2 = self.inpofa[face, 1]
+            point3 = self.inpofa[face, 2]
+            
+            v1x = self.point_coords[point2, 0] - self.point_coords[point1, 0]
+            v1y = self.point_coords[point2, 1] - self.point_coords[point1, 1]
+            v1z = self.point_coords[point2, 2] - self.point_coords[point1, 2]
+
+            v2x = self.point_coords[point3, 0] - self.point_coords[point1, 0]
+            v2y = self.point_coords[point3, 1] - self.point_coords[point1, 1]
+            v2z = self.point_coords[point3, 2] - self.point_coords[point1, 2]
+
+            normalx = v1y * v2z - v1z * v2y
+            normaly = v1z * v2x - v1x * v2z
+            normalz = v1x * v2y - v1y * v2x
+
+            norm = sqrt(normalx * normalx + normaly * normaly + normalz * normalz)
+            
+            self.normal_faces[face, 0] = normalx / norm
+            self.normal_faces[face, 1] = normaly / norm
+            self.normal_faces[face, 2] = normalz / norm
+
+        self.are_normals_calculated = True

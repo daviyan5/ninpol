@@ -11,7 +11,7 @@ force    = False
 # check if the --debug flag has been passed
 if '--debug' in sys.argv:
     is_debug = True
-    force    = True
+    force    = False
 
 print(" ============= Debug mode:", str(is_debug) + " ============= ")
 
@@ -54,7 +54,6 @@ ext_data = [
             include_dirs = [
                 np.get_include()
             ]
-        
         )
 ]
 

@@ -1,17 +1,18 @@
 import numpy as np
+
 from cython.parallel import prange
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from libc.stdio cimport printf
 from libc.math cimport sqrt
-from .grid import Grid
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
 
-cdef void GLS(const Grid grid, 
-              const DTYPE_I_t[::1] in_points, const DTYPE_I_t[::1] nm_points, 
-              const DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_A,
-              DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
+cdef void GLS(  Grid grid, 
+                const DTYPE_I_t[::1] in_points, const DTYPE_I_t[::1] nm_points, 
+                const DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
+                DTYPE_I_t[:, ::1] connectivity_idx,
+                DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
     """
     Main GLS function that processes the grid structure into substructures.
     """
@@ -20,10 +21,11 @@ cdef void GLS(const Grid grid,
         int n_faces = grid.n_faces
         
 
-cdef void interpolate_nodes(const Grid grid, 
-                            const DTYPE_F_t[::1] target, const int is_neumann = 0
+cdef void interpolate_nodes(Grid grid, 
+                            const DTYPE_F_t[::1] target,
                             DTYPE_F_t[:, ::1] weights,
-                            DTYPE_F_t[::1] neumann_ws):
+                            DTYPE_F_t[::1] neumann_ws,
+                            int is_neumann = 0):
     
     cdef:
         int i, j, k
@@ -35,16 +37,14 @@ cdef void interpolate_nodes(const Grid grid,
         DTYPE_F_t[::1] KSetv = np.zeros(grid.MX_ELEMENTS_PER_POINT, dtype=DTYPE_F)
         DTYPE_F_t[::1] Sv    = np.zeros(grid.MX_FACES_PER_POINT, dtype=DTYPE_F)
 
-        np.ndarray[DTYPE_F_t, ndim=2, mode='c'] Mi = np.zeros((1, 1), dtype=DTYPE_F)
-        np.ndarray[DTYPE_F_t, ndim=2, mode='c'] Ni = np.zeros((1, 1), dtype=DTYPE_F)
+        cnp.ndarray[DTYPE_F_t, ndim=2, mode='c'] Mi = np.zeros((1, 1), dtype=DTYPE_F)
+        cnp.ndarray[DTYPE_F_t, ndim=2, mode='c'] Ni = np.zeros((1, 1), dtype=DTYPE_F)
         
-        np.ndarray[DTYPE_I_t, ndim=1, mode='c'] neu_rows = np.zeros(1, dtype=DTYPE_I)
+        cnp.ndarray[DTYPE_I_t, ndim=1, mode='c'] neu_rows = np.zeros(1, dtype=DTYPE_I)
         
         
         DTYPE_F_t[:, ::1] M = np.zeros((1, 1), dtype=DTYPE_F)
 
-
-    
     for i in range(n_target):
         el_idx = 0
         for j in range(grid.esup_ptr[i], grid.esup_ptr[i + 1]):
@@ -84,23 +84,22 @@ cdef void interpolate_nodes(const Grid grid,
         if is_neumann:
             neumann_ws[i] = M[-1, -1]
 
-cdef void set_ls_matrices(const Grid grid, 
-                          np.ndarray Mi, np.ndarray Ni, 
+cdef void set_ls_matrices(Grid grid, 
+                          cnp.ndarray Mi, cnp.ndarray Ni, 
                           const int v, const int nK, const int nS,
                           const DTYPE_F_t[::1] KSetv, const DTYPE_F_t[::1] Sv):
     
     cdef:
         int i, j, k
-        DTYPE_F_t[::1] xv     = grid.point_coords[v]
-        DTYPE_F_t[:, ::1] xK  = np.zeros((Kv, 3), dtype=DTYPE_F)
-        DTYPE_F_t[:, ::1] dKv = np.zeros((Kv, 3), dtype=DTYPE_F)
+        cnp.ndarray[DTYPE_F_t, ndim=2, mode='c'] xv  = grid.point_coords[v]
+        cnp.ndarray[DTYPE_F_t, ndim=2, mode='c'] xK  = np.zeros((nK, 3), dtype=DTYPE_F)
+        cnp.ndarray[DTYPE_F_t, ndim=2, mode='c'] dKv = np.zeros((nK, 3), dtype=DTYPE_F)
 
-        np.ndarray[DTYPE_I_t, ndim=1, mode='c'] Ksetv_range = np.arange(nK)
+        cnp.ndarray[DTYPE_I_t, ndim=1, mode='c'] Ksetv_range = np.arange(nK)
 
     for i in range(nK):
-        for i in range(3):
-            xK[i, :] = grid.point_coords[KSetv[i, :]]
-        dKv[i, :] = xK[i, :] - xv
+        xK[i] = grid.centroid[KSetv[i]]
+        dKv[i] = xK[i] - xv
     
     Mi[Ksetv_range, 3 * Ksetv_range] = dKv[:, 0]
     Mi[Ksetv_range, 3 * Ksetv_range + 1] = dKv[:, 1]
@@ -110,10 +109,3 @@ cdef void set_ls_matrices(const Grid grid,
     Ni[Ksetv_range, Ksetv_range] = 1.0
 
     
-
-
-def GLSpy(Grid grid):
-    """
-    Python wrapper function for the GLS Cython function.
-    """
-    GLS(grid)
