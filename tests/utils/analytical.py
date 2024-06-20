@@ -7,10 +7,30 @@ point_list = None
 kdtree = None
 pressure = None
 
+def get_bc(centroid, function, type, **args):
+    centroid = np.asarray(centroid)
+    if function == "linear":
+        if type == "neumann":
+            return 0.
+        elif type == "dirichlet":
+            return linear(centroid)
+    elif function == "quadratic":
+        if type == "neumann":
+            args["normal"] = np.asarray(args["normal"])
+            return (-2 * centroid).dot(args["normal"])
+        elif type == "dirichlet":
+            return quadratic(centroid)
+        
 def linear(centroid):
+    if len(centroid.shape) == 1:
+        return centroid[0] + centroid[1] + centroid[2]
     return centroid[:, 0] + centroid[:, 1] + centroid[:, 2]
 
+
+    
 def quadratic(centroid):
+    if len(centroid.shape) == 1:
+        return centroid[0]**2 + centroid[1]**2 + centroid[2]**2
     return centroid[:, 0]**2 + centroid[:, 1]**2 + centroid[:, 2]**2
 
 def buildKDTree(point_list):

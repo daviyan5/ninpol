@@ -131,6 +131,7 @@ cdef class Grid:
     cdef readonly DTYPE_F_t[:, ::1] point_coords
     cdef readonly DTYPE_F_t[:, ::1] centroids
     cdef readonly DTYPE_F_t[:, ::1] normal_faces
+    cdef readonly DTYPE_F_t[:, ::1] faces_centers
     
     cdef readonly DTYPE_I_t[::1] boundary_faces
 
@@ -255,6 +256,6 @@ cdef class Grid:
     
     cdef void load_point_coords(self, const DTYPE_F_t[:, ::1] point_coords)
 
-    cdef void calculate_cells_centroids(self)
+    cdef void calculate_centroids(self)
 
     cdef void calculate_normal_faces(self)

@@ -4,6 +4,7 @@ import meshio
 import numpy as np
 import analytical
 
+import ninpol
 # Move current path to the directory of this file
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
@@ -41,6 +42,7 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
     connectivity = None
     linear = []
     quadratic = []
+    permeability = []
     quarter_five_spot = []
     for cell_type in mesh.cells:
         n_cells = len(cell_type.data)
@@ -51,17 +53,63 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
         lp, q, q5 = calculate_properties(centroids, "box" in file_name)
         linear.append(lp)
         quadratic.append(q)
+        K = np.ndarray((n_cells, 3 * 3))
+        K[:] = np.array([1.0, 0.5, 0,
+                         0.5, 1.0, 0.5,
+                           0, 0.5, 1.0])
+        
+        permeability.append(K)
         if "box" in file_name:
             quarter_five_spot.append(q5)
 
-
+    interpolador = ninpol.Interpolator()
+    interpolador.load_mesh(temp_output_dir + "foo.vtk")
+    grid_obj = interpolador.grid_obj
     
-    
+    neumann_flag = np.zeros(grid_obj.n_points, dtype=int)
+    dirichlet_flag = np.zeros(grid_obj.n_points, dtype=int)
 
+    neumann_l      = np.zeros(grid_obj.n_points)
+    dirichlet_l      = np.zeros(grid_obj.n_points)
+
+    neumann_q      = np.zeros(grid_obj.n_points)
+    dirichlet_q      = np.zeros(grid_obj.n_points)
+    for face in range(grid_obj.n_faces):
+        if grid_obj.boundary_faces[face]:
+            psuf = np.asarray(grid_obj.inpofa[face])
+            psuf = psuf[psuf != -1]
+            rd = np.random.rand()
+            if rd < 0.3:
+                psuf = psuf[dirichlet_flag[psuf] == False]
+                neumann_flag[psuf] = True
+                neumann_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                                                                           "linear", "neumann")
+                
+                neumann_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                                                                           "quadratic", "neumann", normal=grid_obj.normal_faces[face])
+            else:
+                dirichlet_flag[psuf] = True
+                neumann_flag[psuf] = False
+                dirichlet_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                                                                            "linear", "dirichlet")
+
+                dirichlet_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                                                                            "quadratic", "dirichlet")
+    
     # Add properties to cell data
     cell_data = {
         "linear": linear,
         "quadratic": quadratic,
+        "permeability": list(permeability)
+    }
+    point_data = {
+        "neumann_flag": neumann_flag,
+        "dirichlet_flag": dirichlet_flag,
+
+        "neumann_linear": neumann_l,
+        "dirichlet_linear": dirichlet_l,
+        "neumann_quadratic": neumann_q,
+        "dirichlet_quadratic": dirichlet_q
     }
     if "box" in file_name:
         cell_data["quarter_five_spot"] = quarter_five_spot
@@ -69,7 +117,7 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
     # Save modified mesh file
     file_name_without_extension = os.path.splitext(file_name)[0]
     output_file = os.path.join(output_dir, file_name_without_extension + ".vtk")
-    mesh_out = meshio.Mesh(mesh.points, mesh.cells, cell_data=cell_data)
+    mesh_out = meshio.Mesh(mesh.points, mesh.cells, cell_data=cell_data, point_data=point_data)
     meshio.write(output_file, mesh_out)
 
 # Define directories

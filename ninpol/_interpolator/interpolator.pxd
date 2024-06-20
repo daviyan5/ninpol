@@ -40,7 +40,7 @@ cdef class Interpolator:
 
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability)
 
-    cdef tuple prepare_interpolator(self, str method, 
+    cdef tuple prepare_interpolator(self, str method, str variable,
                                     const int data_dimension, 
                                     const DTYPE_I_t[::1] target_points)
 

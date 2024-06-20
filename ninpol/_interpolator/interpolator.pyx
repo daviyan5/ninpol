@@ -66,9 +66,8 @@ cdef class Interpolator:
         self.grid_obj = Grid(*args)
 
         self.grid_obj.build()
-        
         self.grid_obj.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
-        self.grid_obj.calculate_cells_centroids()
+        self.grid_obj.calculate_centroids()
         self.grid_obj.calculate_normal_faces()
        
         if self.mesh_obj.cell_data:
@@ -337,7 +336,7 @@ cdef class Interpolator:
 
         # The value of the interpolation is the product of the lines of the 
         # weight matrix with the lines of the connectivity matrix, and the sum of the results for each line
-        weights, connectivity_idx = self.prepare_interpolator(method, data_dimension, target_points)
+        weights, connectivity_idx = self.prepare_interpolator(method, variable, data_dimension, target_points)
         
         cdef:
             int i, j, k
@@ -384,7 +383,7 @@ cdef class Interpolator:
             weights_sparse = sp.csr_matrix((data, (rows, cols)), shape=(n_target, n_elems))
             return weights_sparse
 
-    cdef tuple prepare_interpolator(self, str method, 
+    cdef tuple prepare_interpolator(self, str method, str variable,
                                     const int data_dimension, 
                                     const DTYPE_I_t[::1] target_points):
         
@@ -420,7 +419,7 @@ cdef class Interpolator:
         if method == "gls":
             in_points     = np.where(np.asarray(self.grid_obj.boundary_points) == 0)[0]
             nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
-            nm_index      = self.variable_to_index["points"]["neumann"]
+            nm_index      = self.variable_to_index["points"]["neumann" + "_" + variable]
 
             nm_points     = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
 

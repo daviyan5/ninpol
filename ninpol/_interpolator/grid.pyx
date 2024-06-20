@@ -99,6 +99,7 @@ cdef class Grid:
 
         self.point_coords = np.zeros((0, 0),  dtype=DTYPE_F)
         self.centroids    = np.zeros((0, 0),  dtype=DTYPE_F)
+        self.faces_centers = np.zeros((0, 0), dtype=DTYPE_F)
 
         self.normal_faces = np.zeros((0, 0),  dtype=DTYPE_F)
 
@@ -560,7 +561,7 @@ cdef class Grid:
         self.point_coords = coords.copy()
         self.are_coords_loaded = True
 
-    cdef void calculate_cells_centroids(self):
+    cdef void calculate_centroids(self):
         if self.are_elements_loaded == False:
             raise ValueError("The element types have not been set.")
         if self.are_coords_loaded == False:
@@ -580,6 +581,8 @@ cdef class Grid:
             int i, j, k
             int elem_type
             int npoel_e
+            int npofa
+
         self.centroids = np.zeros((self.n_elems, self.dim), dtype=DTYPE_F)
         
         cdef:
@@ -595,6 +598,19 @@ cdef class Grid:
                 for k in range(self.dim):
                     self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k] / npoel_e
 
+        self.faces_centers = np.zeros((self.n_faces, self.dim), dtype=DTYPE_F)
+        omp_set_num_threads(use_threads)
+        for i in range(self.n_faces):#, nogil=False, schedule='static', num_threads=use_threads):
+            npofa = 0
+            for j in range(NINPOL_MAX_POINTS_PER_FACE):
+                if self.inpofa[i, j] == -1:
+                    break
+                npofa = npofa + 1
+                for k in range(self.dim):
+                    self.faces_centers[i, k] += self.point_coords[self.inpofa[i, j], k]
+            for k in range(self.dim):
+                self.faces_centers[i, k] /= npofa
+            
         self.are_centroids_calculated = True
 
     cdef void calculate_normal_faces(self):
