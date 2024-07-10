@@ -74,27 +74,39 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
 
     neumann_q      = np.zeros(grid_obj.n_points)
     dirichlet_q      = np.zeros(grid_obj.n_points)
+
+    neumann_q5      = np.zeros(grid_obj.n_points)
+    dirichlet_q5      = np.zeros(grid_obj.n_points)
+    
     for face in range(grid_obj.n_faces):
         if grid_obj.boundary_faces[face]:
             psuf = np.asarray(grid_obj.inpofa[face])
             psuf = psuf[psuf != -1]
             rd = np.random.rand()
             if rd < 0.3:
-                psuf = psuf[dirichlet_flag[psuf] == False]
                 neumann_flag[psuf] = True
-                neumann_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                neumann_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                            "linear", "neumann")
                 
-                neumann_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                neumann_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                            "quadratic", "neumann", normal=grid_obj.normal_faces[face])
+                
+                if "box" in file_name:
+                    neumann_q5[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
+                                                                           "quarter_five_spot", "neumann")
             else:
+                psuf = psuf[neumann_flag[psuf] == 0]
                 dirichlet_flag[psuf] = True
-                neumann_flag[psuf] = False
-                dirichlet_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                
+                dirichlet_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                             "linear", "dirichlet")
 
-                dirichlet_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], 
+                dirichlet_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                             "quadratic", "dirichlet")
+                
+                if "box" in file_name:
+                    dirichlet_q5[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
+                                                                            "quarter_five_spot", "dirichlet")
     
     # Add properties to cell data
     cell_data = {
@@ -109,10 +121,13 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
         "neumann_linear": neumann_l,
         "dirichlet_linear": dirichlet_l,
         "neumann_quadratic": neumann_q,
-        "dirichlet_quadratic": dirichlet_q
+        "dirichlet_quadratic": dirichlet_q,
+        
     }
     if "box" in file_name:
         cell_data["quarter_five_spot"] = quarter_five_spot
+        point_data["neumann_quarter_five_spot"]   = neumann_q5
+        point_data["dirichlet_quarter_five_spot"] = dirichlet_q5
 
     # Save modified mesh file
     file_name_without_extension = os.path.splitext(file_name)[0]

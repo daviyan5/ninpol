@@ -77,11 +77,11 @@ class TestAccuracy:
                 results_dict["files"][files[case]]["methods"][method] = {}
                 for function, name in zip(FUNCTIONS, NAMES):
                     
-                    if name not in msh.cell_data:
+                    if name not in msh.cell_data or name not in ["linear", "quadratic", "quarter_five_spot"]:
                         continue
                         
                     reference = function(points_coords)
-                    measure = np.asarray(interpolador.interpolate(name, method, return_value=True))
+                    measure, _ = interpolador.interpolate(name, method, return_value=True)
                     norm = float(l2norm_relative(measure, reference))
                     
                     results_dict["files"][files[case]]["methods"][method]["error_" + name] = norm

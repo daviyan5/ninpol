@@ -17,3 +17,4 @@ cython_debug/*
 ninpol.egg-info/*
 .pytest_cache/*
 .vscode/*
+*.json

@@ -67,7 +67,7 @@ class TestPerformance:
             interpolador.load_mesh(os.path.join(mesh_dir, filename))
 
         def interpolate(interpolador, points):
-            interpolador.interpolate("linear", "inv_dist")
+            interpolador.interpolate("linear", "gls")
         
         def average_memory(func):
             average = 0
@@ -177,7 +177,7 @@ class TestPerformance:
             print(f"{'Time to load mesh:':<35} {time_color[0]}{time_to_load:.2e} s{Style.RESET_ALL}")
             print(f"{'Time to process mesh:':<35} {time_color[1]}{time_to_process:.2e} s{Style.RESET_ALL}")
             print(f"{'Time to build grid:':<35} {time_color[2]}{time_to_build:.2e} s{Style.RESET_ALL}")
-            print(f"{'Time to interpolate:':<35} {time_color[3]}{time_to_interpolate:.2e} s{Style.RESET_ALL}")
+            print(f"{'Time to interpolate (GLS):':<35} {time_color[3]}{time_to_interpolate:.2e} s{Style.RESET_ALL}")
 
             # print()
             # print(f"{'Memory to load, process and build:':<35} {memory_to_load_process_build:.2e} MB{Style.RESET_ALL}")

@@ -547,9 +547,9 @@ cdef class Grid:
             for j in range(self.esuf_ptr[i], self.esuf_ptr[i+1]):
                 esuf2d[i, j - self.esuf_ptr[i]] = self.esuf[j]
 
-        data['esup']    = esup2d.copy()
-        data['psup']    = psup2d.copy()
-        data['esuf']   = esuf2d.copy()
+        data['esup']  = esup2d.copy()
+        data['psup']  = psup2d.copy()
+        data['esuf']  = esuf2d.copy()
 
         for key in data:
             data[key] = np.asarray(data[key])
@@ -621,13 +621,16 @@ cdef class Grid:
         cdef:
             int i, j, k
             int face
+            int elem
             int point1 = 0, point2 = 0, point3 = 0
 
             float v1x, v1y, v1z, v2x, v2y, v2z
+            float elemx, elemy, elemz
             float normalx, normaly, normalz
 
             float norm = 0.0
             int use_threads = min(8, np.ceil(self.n_faces / 800))
+
         omp_set_num_threads(use_threads)
         for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
         #for face in range(self.n_faces):
@@ -652,5 +655,16 @@ cdef class Grid:
             self.normal_faces[face, 0] = normalx / norm
             self.normal_faces[face, 1] = normaly / norm
             self.normal_faces[face, 2] = normalz / norm
+
+            # Check if the normal is pointing to the element self.esuf[self.esuf_ptr[face]]
+            elem = self.esuf[self.esuf_ptr[face]]
+            elemx = self.centroids[elem, 0] - self.faces_centers[face, 0]
+            elemy = self.centroids[elem, 1] - self.faces_centers[face, 1]
+            elemz = self.centroids[elem, 2] - self.faces_centers[face, 2]
+
+            if (elemx * normalx) + (elemy * normaly) + (elemz * normalz) >= 0:
+                self.normal_faces[face, 0] *= -1
+                self.normal_faces[face, 1] *= -1
+                self.normal_faces[face, 2] *= -1
 
         self.are_normals_calculated = True

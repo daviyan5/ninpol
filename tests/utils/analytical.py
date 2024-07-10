@@ -7,7 +7,7 @@ point_list = None
 kdtree = None
 pressure = None
 
-def get_bc(centroid, function, type, **args):
+def get_bc(centroid, permeability, function, type, **args):
     centroid = np.asarray(centroid)
     if function == "linear":
         if type == "neumann":
@@ -17,9 +17,14 @@ def get_bc(centroid, function, type, **args):
     elif function == "quadratic":
         if type == "neumann":
             args["normal"] = np.asarray(args["normal"])
-            return (-2 * centroid).dot(args["normal"])
+            return (-2 * np.dot(permeability, centroid)).dot(args["normal"])
         elif type == "dirichlet":
             return quadratic(centroid)
+    elif function == "quarter_five_spot":
+        if type == "neumann":
+            return 0.
+        elif type == "dirichlet":
+            return quarter_five_spot(np.array([centroid]))
         
 def linear(centroid):
     if len(centroid.shape) == 1:

@@ -2,6 +2,7 @@
 This file contains the "Interpolator" class definition, for interpolating mesh unknows. 
 """
 import numpy as np
+import time
 import meshio
 import scipy.sparse as sp
 
@@ -333,10 +334,11 @@ cdef class Interpolator:
         cdef: 
             DTYPE_F_t[:, ::1] weights 
             DTYPE_I_t[:, ::1] connectivity_idx
+            DTYPE_F_t[::1] neumann_ws
 
         # The value of the interpolation is the product of the lines of the 
         # weight matrix with the lines of the connectivity matrix, and the sum of the results for each line
-        weights, connectivity_idx = self.prepare_interpolator(method, variable, data_dimension, target_points)
+        weights, connectivity_idx, neumann_ws = self.prepare_interpolator(method, variable, data_dimension, target_points)
         
         cdef:
             int i, j, k
@@ -354,6 +356,7 @@ cdef class Interpolator:
             int MX_ELEMENTS_PER_POINT = self.grid_obj.MX_ELEMENTS_PER_POINT
 
         if return_value:
+            
             # Multiply the weights by the connectivity, element-wise, and sum  
             for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
                 for k in range(data_dimension):
@@ -365,10 +368,11 @@ cdef class Interpolator:
                         result[i, k] += weights[i, j] * source_data[elem * data_dimension + k]
 
             # Remove unnecessary dimensions
-            return np.squeeze(result)
+            return np.asarray(np.squeeze(result)), np.asarray(neumann_ws)
 
         else:
             # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
+            
             omp_set_num_threads(use_threads)
             for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
                 for j in range(MX_ELEMENTS_PER_POINT):
@@ -378,10 +382,10 @@ cdef class Interpolator:
                             continue
                         rows[index] = i
                         cols[index] = connectivity_idx[i, j] * data_dimension + k
-                        data[index] = weights[i, j * data_dimension + k]
+                        data[index] = weights[i, j * data_dimension + k] + neumann_ws[i]
             
             weights_sparse = sp.csr_matrix((data, (rows, cols)), shape=(n_target, n_elems))
-            return weights_sparse
+            return weights_sparse, np.asarray(neumann_ws)
 
     cdef tuple prepare_interpolator(self, str method, str variable,
                                     const int data_dimension, 
@@ -404,10 +408,12 @@ cdef class Interpolator:
 
             DTYPE_I_t[::1] in_points, nm_points
             DTYPE_F_t[:, :, ::1] permeability = np.zeros((self.grid_obj.n_elems, dim, dim), dtype=DTYPE_F)
-            DTYPE_F_t[::1] diff_mag     = np.zeros(self.grid_obj.n_elems, dtype=DTYPE_F)
+            DTYPE_F_t[::1] diff_mag   = np.zeros(self.grid_obj.n_elems, dtype=DTYPE_F)
+            DTYPE_F_t[::1] neumann    = np.zeros(self.grid_obj.n_points, dtype=DTYPE_F)
             DTYPE_F_t[::1] neumann_ws = np.zeros(n_target, dtype=DTYPE_F)
 
-        # Populate connectivity_val
+        
+        # Populate connectivity_idx
         omp_set_num_threads(use_threads)
         for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
             point = target_points[i]
@@ -415,8 +421,8 @@ cdef class Interpolator:
             last = self.grid_obj.esup_ptr[point + 1]
             for j, elem in enumerate(self.grid_obj.esup[first:last]):
                 connectivity_idx[i, j] = elem
-
         if method == "gls":
+            
             in_points     = np.where(np.asarray(self.grid_obj.boundary_points) == 0)[0]
             nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
             nm_index      = self.variable_to_index["points"]["neumann" + "_" + variable]
@@ -427,12 +433,14 @@ cdef class Interpolator:
                                       (self.grid_obj.n_elems, dim, dim))
 
             diff_mag      = self.cells_data[self.variable_to_index["cells"]["diff_mag"]]
+            neumann       = self.points_data[nm_index]
 
+            
             self.supported_methods[method](
                 self.grid_obj, 
                 in_points, nm_points,
                 permeability, diff_mag,
-                connectivity_idx,
+                neumann,
                 weights, neumann_ws
             )
 
@@ -443,6 +451,6 @@ cdef class Interpolator:
                 connectivity_idx, weights
             )
         
-        return weights, connectivity_idx
+        return weights, connectivity_idx, neumann_ws
 
 
