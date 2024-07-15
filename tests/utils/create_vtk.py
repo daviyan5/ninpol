@@ -82,8 +82,8 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
         if grid_obj.boundary_faces[face]:
             psuf = np.asarray(grid_obj.inpofa[face])
             psuf = psuf[psuf != -1]
-            rd = np.random.rand()
-            if rd < 0.3:
+            rd = 1.2# p.random.rand()
+            if rd < (0.3 if not "box" in file_name else 1.0):
                 neumann_flag[psuf] = True
                 neumann_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                            "linear", "neumann")

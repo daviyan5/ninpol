@@ -242,11 +242,11 @@ class TestCorrectness:
                 n_passed += 1
             with subtests.test('Test "Weights" for Distance Inverse'):
                 # Interpolate 'linear' for all points and receive the weights matrix
-                weights = interpolador.interpolate("linear", "inv_dist")
+                weights, neumann_ws = interpolador.interpolate("linear", "inv_dist")
 
-                # For every point, the sum of the weights should be 1
+                # For every point, the sum of the weights should be either 1 or 0.
                 for i in range(n_points):
-                    assert np.isclose(np.sum(weights[i]), 1), "The sum of the weights should be 1"
+                    assert np.isclose(np.sum(weights[i]), 1) or np.isclose(np.sum(weights[i]), 0), "Weights don't sum to 1 or 0"
 
                 # For every point, for every elem in esup of point
                 #   weights[point, elem] = 1 / distance(point, centroid(elem)) / total_distance

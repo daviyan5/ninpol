@@ -348,9 +348,11 @@ cdef class Interpolator:
             int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
             int index, elem
 
-            DTYPE_I_t[::1] rows = np.zeros(n_target * n_columns, dtype=DTYPE_I)
-            DTYPE_I_t[::1] cols = np.zeros(n_target * n_columns, dtype=DTYPE_I)   
-            DTYPE_F_t[::1] data = np.zeros(n_target * n_columns, dtype=DTYPE_F)         
+            int size = 0
+
+            DTYPE_I_t[::1] rows = np.ones(n_target * n_columns, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] cols = np.ones(n_target * n_columns, dtype=DTYPE_I) * -1
+            DTYPE_F_t[::1] data = np.ones(n_target * n_columns, dtype=DTYPE_F) * -1    
             int use_threads = min(8, np.ceil(n_target / 800))
 
             int MX_ELEMENTS_PER_POINT = self.grid_obj.MX_ELEMENTS_PER_POINT
@@ -372,19 +374,26 @@ cdef class Interpolator:
 
         else:
             # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
-            
-            omp_set_num_threads(use_threads)
-            for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
+            size = 0
+            index = 0
+            for i in range(n_target): 
                 for j in range(MX_ELEMENTS_PER_POINT):
                     for k in range(data_dimension):
-                        index = i * n_columns + j * data_dimension + k
                         if connectivity_idx[i, j] == -1:
                             continue
                         rows[index] = i
                         cols[index] = connectivity_idx[i, j] * data_dimension + k
                         data[index] = weights[i, j * data_dimension + k] + neumann_ws[i]
+                        index += 1
+
+            # Get smallest index where data is -1
+            size = np.where(np.asarray(data) == -1)[0][0]
+
+            weights_sparse = sp.csr_matrix((np.asarray(data)[:size], 
+                                           (np.asarray(rows)[:size], np.asarray(cols)[:size])), 
+                                           shape=(n_target, n_elems))
+            weights_sparse.eliminate_zeros()
             
-            weights_sparse = sp.csr_matrix((data, (rows, cols)), shape=(n_target, n_elems))
             return weights_sparse, np.asarray(neumann_ws)
 
     cdef tuple prepare_interpolator(self, str method, str variable,
@@ -396,6 +405,9 @@ cdef class Interpolator:
             int n_target = len(target_points)
             int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
             int dim = self.grid_obj.dim
+
+            int nm_flag_index, nm_index
+            int permeability_index, diff_mag_index
 
             DTYPE_I_t[:, ::1] connectivity_idx  = np.ones((n_target, self.grid_obj.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
             DTYPE_F_t[:, ::1] weights           = np.zeros((n_target, n_columns), dtype=DTYPE_F)
@@ -424,15 +436,19 @@ cdef class Interpolator:
         if method == "gls":
             
             in_points     = np.where(np.asarray(self.grid_obj.boundary_points) == 0)[0]
+            
             nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
             nm_index      = self.variable_to_index["points"]["neumann" + "_" + variable]
 
-            nm_points     = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
+            permeability_index = self.variable_to_index["cells"]["permeability"]
+            diff_mag_index     = self.variable_to_index["cells"]["diff_mag"]
 
-            permeability  = np.reshape(self.cells_data[self.variable_to_index["cells"]["permeability"]], 
+            nm_points     = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
+            
+            permeability  = np.reshape(self.cells_data[permeability_index], 
                                       (self.grid_obj.n_elems, dim, dim))
 
-            diff_mag      = self.cells_data[self.variable_to_index["cells"]["diff_mag"]]
+            diff_mag      = self.cells_data[diff_mag_index]
             neumann       = self.points_data[nm_index]
 
             

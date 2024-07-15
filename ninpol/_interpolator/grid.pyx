@@ -300,7 +300,7 @@ cdef class Grid:
 
         # Same logic as esup
         cdef:
-            int i, j
+            int i, j, k
             int elem_type
             int face
 
@@ -332,9 +332,22 @@ cdef class Grid:
         for i in range(self.n_faces, 0, -1):
             self.esuf_ptr[i] = self.esuf_ptr[i-1]
         self.esuf_ptr[0] = 0
-
+        
         cdef:
+            int elem
             int num_threads = min(8, np.ceil(self.n_faces / 800))
+
+        # Make sure that the first element is the one that defined self.inpofa
+        omp_set_num_threads(num_threads)
+        for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=num_threads):
+            elem = self.esuf[self.esuf_ptr[face]]
+            if elem != -1:
+                elem_type = self.element_types[elem]
+                for j in range(self.nfael[elem_type]):
+                    if self.infael[elem, j] == face:
+                        break 
+                for k in range(self.lnofa[elem_type, j]):
+                    self.inpofa[face, k] = self.inpoel[elem, self.lpofa[elem_type, j, k]]
         
         self.boundary_faces = np.zeros(self.n_faces, dtype=DTYPE_I)
         self.boundary_points = np.zeros(self.n_points, dtype=DTYPE_I)
@@ -600,7 +613,7 @@ cdef class Grid:
 
         self.faces_centers = np.zeros((self.n_faces, self.dim), dtype=DTYPE_F)
         omp_set_num_threads(use_threads)
-        for i in range(self.n_faces):#, nogil=False, schedule='static', num_threads=use_threads):
+        for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
             npofa = 0
             for j in range(NINPOL_MAX_POINTS_PER_FACE):
                 if self.inpofa[i, j] == -1:
@@ -620,7 +633,7 @@ cdef class Grid:
         self.normal_faces = np.zeros((self.n_faces, self.dim), dtype=DTYPE_F)
         cdef:
             int i, j, k
-            int face
+            int face = 0
             int elem
             int point1 = 0, point2 = 0, point3 = 0
 
@@ -638,33 +651,26 @@ cdef class Grid:
             point2 = self.inpofa[face, 1]
             point3 = self.inpofa[face, 2]
             
-            v1x = self.point_coords[point2, 0] - self.point_coords[point1, 0]
-            v1y = self.point_coords[point2, 1] - self.point_coords[point1, 1]
-            v1z = self.point_coords[point2, 2] - self.point_coords[point1, 2]
+            v1x = self.point_coords[point1, 0] - self.point_coords[point2, 0]
+            v1y = self.point_coords[point1, 1] - self.point_coords[point2, 1]
+            v1z = self.point_coords[point1, 2] - self.point_coords[point2, 2]
 
-            v2x = self.point_coords[point3, 0] - self.point_coords[point1, 0]
-            v2y = self.point_coords[point3, 1] - self.point_coords[point1, 1]
-            v2z = self.point_coords[point3, 2] - self.point_coords[point1, 2]
+            v2x = self.point_coords[point3, 0] - self.point_coords[point2, 0]
+            v2y = self.point_coords[point3, 1] - self.point_coords[point2, 1]
+            v2z = self.point_coords[point3, 2] - self.point_coords[point2, 2]
 
             normalx = v1y * v2z - v1z * v2y
             normaly = v1z * v2x - v1x * v2z
             normalz = v1x * v2y - v1y * v2x
 
             norm = sqrt(normalx * normalx + normaly * normaly + normalz * normalz)
+            norm = abs(norm)
             
             self.normal_faces[face, 0] = normalx / norm
             self.normal_faces[face, 1] = normaly / norm
             self.normal_faces[face, 2] = normalz / norm
 
-            # Check if the normal is pointing to the element self.esuf[self.esuf_ptr[face]]
-            elem = self.esuf[self.esuf_ptr[face]]
-            elemx = self.centroids[elem, 0] - self.faces_centers[face, 0]
-            elemy = self.centroids[elem, 1] - self.faces_centers[face, 1]
-            elemz = self.centroids[elem, 2] - self.faces_centers[face, 2]
-
-            if (elemx * normalx) + (elemy * normaly) + (elemz * normalz) >= 0:
-                self.normal_faces[face, 0] *= -1
-                self.normal_faces[face, 1] *= -1
-                self.normal_faces[face, 2] *= -1
-
+        
+        
+        
         self.are_normals_calculated = True
