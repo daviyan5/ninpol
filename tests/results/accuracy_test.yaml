@@ -1,5 +1,14 @@
-datetime: 2024-07-06 19:35
+datetime: 2024-07-15 21:05
 files:
+  benchtetra1.vtk:
+    methods:
+      gls:
+        error_linear: 0.957990057099542
+        error_quadratic: 0.9801017377830146
+      inv_dist:
+        error_linear: 0.08060151393540343
+        error_quadratic: 0.14171933854795712
+    n_points: 80
   box0.vtk:
     methods:
       gls:
@@ -58,8 +67,8 @@ files:
   hexa0.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.9847319278346619
+        error_quadratic: 0.9953480907613066
       inv_dist:
         error_linear: 0.21320071635561044
         error_quadratic: 0.3544274423364931
@@ -67,8 +76,8 @@ files:
   hexa1.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.896979056930221
+        error_quadratic: 0.9407388031745684
       inv_dist:
         error_linear: 0.08451542547285165
         error_quadratic: 0.15582751003963985
@@ -76,8 +85,8 @@ files:
   hexa2.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.743265795633667
+        error_quadratic: 0.8093669270217037
       inv_dist:
         error_linear: 0.03187883565316692
         error_quadratic: 0.06138872078874852
@@ -85,8 +94,8 @@ files:
   hexa3.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.5744639415464223
+        error_quadratic: 0.6415130196217419
       inv_dist:
         error_linear: 0.011669000700233415
         error_quadratic: 0.022872160606204946
@@ -94,8 +103,8 @@ files:
   hexa4.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.4258161332161597
+        error_quadratic: 0.48239347411552563
       inv_dist:
         error_linear: 0.004200642579437185
         error_quadratic: 0.008294629951023102
@@ -103,8 +112,8 @@ files:
   prism0.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.6876242610744211
+        error_quadratic: 0.7508788602563116
       inv_dist:
         error_linear: 0.021472039676512927
         error_quadratic: 0.04222201696315696
@@ -112,8 +121,8 @@ files:
   prism1.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.5228702190254941
+        error_quadratic: 0.5821617853632611
       inv_dist:
         error_linear: 0.007805462933394623
         error_quadratic: 0.015627824373251598
@@ -121,8 +130,8 @@ files:
   prism2.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.43783553557743565
+        error_quadratic: 0.490948271765611
       inv_dist:
         error_linear: 0.004263061748294405
         error_quadratic: 0.008610865844905408
@@ -130,26 +139,17 @@ files:
   prism3.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.3840688827057745
+        error_quadratic: 0.43223715547622665
       inv_dist:
         error_linear: 0.0027701950181099554
         error_quadratic: 0.005623325438593824
     n_points: 68921
-  spheres.vtk:
-    methods:
-      gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
-      inv_dist:
-        error_linear: 0.014131913967243115
-        error_quadratic: 0.022100306204013927
-    n_points: 95751
   tetra0.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.9579908631630432
+        error_quadratic: 0.9801029314598915
       inv_dist:
         error_linear: 0.08060178046973428
         error_quadratic: 0.14171760961114394
@@ -157,8 +157,8 @@ files:
   tetra1.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.8119636615269534
+        error_quadratic: 0.8717926180508635
       inv_dist:
         error_linear: 0.031640458089434685
         error_quadratic: 0.05602203979367418
@@ -166,8 +166,8 @@ files:
   tetra2.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.7421521414064072
+        error_quadratic: 0.8066710555887496
       inv_dist:
         error_linear: 0.023949210000102424
         error_quadratic: 0.04573013225174201
@@ -175,8 +175,8 @@ files:
   tetra3.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.6902490863719575
+        error_quadratic: 0.7581394139704873
       inv_dist:
         error_linear: 0.01772134544435435
         error_quadratic: 0.033273304620697074
@@ -184,8 +184,8 @@ files:
   tetra4.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.6375960030221002
+        error_quadratic: 0.706312156618321
       inv_dist:
         error_linear: 0.013042377008345171
         error_quadratic: 0.024257420239040865
@@ -193,8 +193,8 @@ files:
   tetra5.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.5804292498551212
+        error_quadratic: 0.646957786541327
       inv_dist:
         error_linear: 0.009282612265437267
         error_quadratic: 0.017533121773817426
@@ -202,8 +202,8 @@ files:
   tetra6.vtk:
     methods:
       gls:
-        error_linear: 1.0
-        error_quadratic: 1.0
+        error_linear: 0.5273776880779882
+        error_quadratic: 0.5925167759325077
       inv_dist:
         error_linear: 0.0067457065447930195
         error_quadratic: 0.012738613618370866
