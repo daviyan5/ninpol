@@ -1,6 +1,6 @@
 import numpy as np
+import scipy as sp
 import time
-import json
 import re
 
 from cython.parallel import prange
@@ -10,6 +10,10 @@ from libc.math cimport sqrt
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
+
+cdef:
+    Logger logger = Logger("GLS")
+    int logging = False
 
 cdef void GLS(Grid grid, 
               const DTYPE_I_t[::1] in_points, 
@@ -40,6 +44,9 @@ cdef void interpolate_nodes(Grid grid,
                             DTYPE_F_t[::1] neumann_ws,                  # Output
                             ):
     
+    cdef: 
+        dict log_dict = {}
+
     cdef:
         int i, j, k
         int point, bpoint
@@ -56,9 +63,7 @@ cdef void interpolate_nodes(Grid grid,
         int MX_INDEX = max(grid.n_elems, grid.n_faces)
 
         DTYPE_F_t[:, ::1] normal_faces = grid.normal_faces
-        
-        
-
+    
         # Volumes surrounding the target point
         DTYPE_I_t[::1] KSetv  = np.zeros(grid.MX_ELEMENTS_PER_POINT, dtype=DTYPE_I)
 
@@ -81,17 +86,13 @@ cdef void interpolate_nodes(Grid grid,
         cnp.ndarray[DTYPE_F_t, ndim=2, mode='c'] nL = np.zeros((grid.MX_FACES_PER_POINT, 3), dtype=DTYPE_F)
         
         
-        DTYPE_F_t[:, ::1] M = np.zeros((1, 1), dtype=DTYPE_F)
-    
-    cdef:
-        dict log_data
-    log_data = {}
+        cnp.ndarray[DTYPE_F_t, ndim=2] M = np.zeros((1, 1), dtype=DTYPE_F)
+
+    setting_times  = 0.
+    solvings_times = 0.
+
+    start_time = time.time()
     for i, point in enumerate(target):
-        # log_data[f"{point}"] = {
-        #     "Mi": [],
-        #     "Ni": [],
-        #     "R" : []
-        # }
         el_idx = 0
         for j in range(grid.esup_ptr[point], grid.esup_ptr[point + 1]):
             KSetv[el_idx] = grid.esup[j]
@@ -120,8 +121,11 @@ cdef void interpolate_nodes(Grid grid,
         Mi = np.zeros((nK + 3 * nS + nb, 3 * nK + 1), dtype=DTYPE_F)
         Ni = np.zeros((nK + 3 * nS + nb, nK + is_neumann), dtype=DTYPE_F)
         
-        set_ls_matrices(grid, point, nK, nS, KSetv, Sv, permeability, diff_mag, Mi, Ni)
-        
+        log_dict[point] = {}
+        set_time = time.time()
+        set_ls_matrices(grid, logger, point, nK, nS, KSetv, Sv, permeability, diff_mag, Mi, Ni, log_dict)
+        setting_times += time.time() - set_time
+
         if is_neumann:
             neu_rows = np.arange(start=nK + 3 * nS, stop=nK + 3 * nS + nb)  
             
@@ -143,11 +147,14 @@ cdef void interpolate_nodes(Grid grid,
             sorter = np.argsort(KSetv)                                                           
             Ik = sorter[np.searchsorted(KSetv, Ks_Svb, sorter=sorter)]
 
-            Mi[neu_rows, 3 * Ik]     = -nL[:, 0]                                                     
-            Mi[neu_rows, 3 * Ik + 1] = -nL[:, 1]                                                 
-            Mi[neu_rows, 3 * Ik + 2] = -nL[:, 2]                                        
+            Mi[neu_rows, 3 * Ik]     = -nL[:len(neu_rows), 0]                                                     
+            Mi[neu_rows, 3 * Ik + 1] = -nL[:len(neu_rows), 1]                                                 
+            Mi[neu_rows, 3 * Ik + 2] = -nL[:len(neu_rows), 2]                                        
 
-        M = np.linalg.inv(Mi.T @ Mi) @ (Mi.T @ Ni)
+        solving_time = time.time()
+        M = sp.linalg.lstsq(Mi, Ni, cond=None, lapack_driver="gelsy")[0] 
+        solvings_times += time.time() - solving_time
+
         M_size  = len(M)
 
         w_total = len(M[M_size - 1, :])
@@ -160,29 +167,51 @@ cdef void interpolate_nodes(Grid grid,
 
         if is_neumann:
             neumann_ws[point] = M[M_size - 1, w_total - 1]
-        
-        # log_data[f"{point}"]["Mi"] = np.asarray(Mi).tolist()
-        # log_data[f"{point}"]["Ni"] = np.asarray(Ni).tolist()
-        # log_data[f"{point}"]["R" ] = np.asarray(M).tolist()
 
-    # save_json_single_line_lists(log_data, "log_cy.json")
+        if logging:
+            logger.log("Interpolating point: %d" % point, "INFO")
+            if nK + nS < 1000:
+                temp_dict = {
+                    "nK" : nK,
+                    "nS" : nS,
+                    "nb" : nb,
+                    "neumann" : is_neumann,
+                    "Mi" : np.asarray(Mi),
+                    "Ni" : np.asarray(Ni),
+                    "neu_rows" : np.asarray(neu_rows),
+                    "Ik" : np.asarray(Ik),
+                    "sorter" : np.asarray(sorter),
+                    "Ks_Svb" : np.asarray(Ks_Svb),
+                    "nL" : np.asarray(nL),
+                }
+            else:
+                temp_dict = {
+                    "nK" : nK,
+                    "nS" : nS,
+                    "nb" : nb,
+                    "neumann" : is_neumann,
+                    "Mi" : {"shape": np.shape(Mi)},
+                    "Ni" : {"shape": np.shape(Ni)},
+                    "neu_rows" : {"shape": np.shape(neu_rows)},
+                    "Ik" : {"shape": np.shape(Ik)},
+                    "sorter" : {"shape": np.shape(sorter)},
+                    "Ks_Svb" : {"shape": np.shape(Ks_Svb)},
+                    "nL" : {"shape": np.shape(nL)}
+                }
+            for key in temp_dict:
+                log_dict[point][key] = temp_dict[key]
+            logger.json(str(point), log_dict[point])
 
-def save_json_single_line_lists(data, file_path, indent=4):
-    # First, convert the data to a JSON string with the desired indentation
-    json_str = json.dumps(data, indent=indent)
     
-    # Use regex to replace newlines in lists with a single space
-    json_str = re.sub(r'\[\s+([^\]]+?)\s+\]', lambda m: '[' + ' '.join(m.group(1).split()) + ']', json_str)
+    print(f"Total time: {time.time() - start_time}")
+    print(f"Setting time: {setting_times}")
+    print(f"Solving time: {solvings_times}")
 
-    # Write the modified JSON string to the file
-    with open(file_path, 'w') as f:
-        f.write(json_str)
-
-cdef void set_ls_matrices(Grid grid, 
+cdef void set_ls_matrices(Grid grid, Logger logger,
                           const int v, const int nK, const int nS,
                           const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, 
                           const DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
-                          cnp.ndarray Mi, cnp.ndarray Ni):
+                          cnp.ndarray Mi, cnp.ndarray Ni, dict log_dict = {}):
     
     cdef:
         int i, j, k
@@ -213,6 +242,7 @@ cdef void set_ls_matrices(Grid grid,
         cnp.ndarray[DTYPE_I_t, ndim=1, mode='c'] idx2 = np.zeros(3 * nS - 2, dtype=DTYPE_I)
         cnp.ndarray[DTYPE_I_t, ndim=1, mode='c'] idx3 = np.zeros(3 * nS - 2, dtype=DTYPE_I)
 
+        dict temp_dict = {}
 
     for i in range(nK):
         xK[i] = grid.centroids[KSetv[i]]
@@ -253,62 +283,134 @@ cdef void set_ls_matrices(Grid grid,
         nL1[nKsv]      = np.dot(N_sj[i], permeability[Ks_Sv[nKsv, 0]])              
         nL2[nKsv]      = np.dot(N_sj[i], permeability[Ks_Sv[nKsv, 1]])              
         nKsv = nKsv + 1
+    
     Ks_Sv = Ks_Sv[:nKsv]
-    sorter = np.argsort(KSetv)                                                      
+    eta_j = eta_j[:nKsv]
+    T_sj1 = T_sj1[:nKsv]
+    T_sj2 = T_sj2[:nKsv]
+    tau_j2 = tau_j2[:nKsv]
+    tau_tsj2 = tau_tsj2[:nKsv]
+    nL1 = nL1[:nKsv]
+    nL2 = nL2[:nKsv]
+    sorter = np.argsort(KSetv)              
+
     Ij1 = sorter[np.searchsorted(KSetv, Ks_Sv[:, 0], sorter=sorter)]    # Index of the volumes around the point (KSetv) that have the face Sv. Basically, i such that KSetv[i] has face[j] in its faces
     Ij2 = sorter[np.searchsorted(KSetv, Ks_Sv[:, 1], sorter=sorter)]    # Same above
     
+
 
     idx1 = np.arange(start=nK,     stop=nK + 3 * nS - 2, step=3)
     idx2 = np.arange(start=nK + 1, stop=nK + 3 * nS - 1, step=3)
     idx3 = np.arange(start=nK + 2, stop=nK + 3 * nS,     step=3)
 
-    # for i in range(len(idx1)):
-    #     for j in range(nKsv):
-    #         Mi[idx1[i], 3 * Ij1[j]]     = -nL1[j, 0]
-    #         Mi[idx1[i], 3 * Ij1[j] + 1] = -nL1[j, 1]
-    #         Mi[idx1[i], 3 * Ij1[j] + 2] = -nL1[j, 2]
+    idx1 = idx1[:nKsv]
+    idx2 = idx2[:nKsv]
+    idx3 = idx3[:nKsv]
 
-    #         Mi[idx1[i], 3 * Ij2[j]]     = nL2[j, 0]
-    #         Mi[idx1[i], 3 * Ij2[j] + 1] = nL2[j, 0]
-    #         Mi[idx1[i], 3 * Ij2[j] + 2] = nL2[j, 0]
+    if logging:
+        if nK + nS < 1000:
+            temp_dict = {
+                "v" : v,
 
-    #         Mi[idx2[i], 3 * Ij1[j]]     = -T_sj1[j, 0]
-    #         Mi[idx2[i], 3 * Ij1[j] + 1] = -T_sj1[j, 1]
-    #         Mi[idx2[i], 3 * Ij1[j] + 2] = -T_sj1[j, 2]
+                "nK" : nK,
+                "nS" : nS,
 
-    #         Mi[idx2[i], 3 * Ij2[j]]     = T_sj1[j, 0]
-    #         Mi[idx2[i], 3 * Ij2[j] + 1] = T_sj1[j, 1]
-    #         Mi[idx2[i], 3 * Ij2[j] + 2] = T_sj1[j, 2]
+                "KSetv" : np.asarray(KSetv),
+                "Sv" : np.asarray(Sv),
+
+                "xv" : np.asarray(xv),
+                "xK" : np.asarray(xK),
+                "dKv": np.asarray(dKv),
+
+                "KSetv_range": np.asarray(KSetv),
+                "xS" : np.asarray(xS),
+                "N_sj": np.asarray(N_sj),
+
+                "eta_j": np.asarray(eta_j),
+                "Ks_Sv": np.asarray(Ks_Sv),
+
+                "Ij1": np.asarray(Ij1),
+                "Ij2": np.asarray(Ij2),
+
+                "T_sj1": np.asarray(T_sj1),
+                "T_sj2": np.asarray(T_sj2),
+
+                "tau_j2": np.asarray(tau_j2),
+                "tau_tsj2": np.asarray(tau_tsj2),
+
+                "nL1": np.asarray(nL1),
+                "nL2": np.asarray(nL2),
+
+                "idx1": np.asarray(idx1),
+                "idx2": np.asarray(idx2),
+                "idx3": np.asarray(idx3)
+            }
+        else:
+            temp_dict = {
+                "v" : v,
+                "nK" : nK,
+                "nS" : nS,
+
+                "KSetv" : {"shape": np.shape(KSetv)},
+                "Sv" : {"shape": np.shape(Sv)},
+                "xv" : {"shape": np.shape(xv)},
+                "xK" : {"shape": np.shape(xK)},
+                "dKv": {"shape": np.shape(dKv)},
+                "KSetv_range": {"shape": np.shape(KSetv)},
+                "xS" : {"shape": np.shape(xS)},
+                "N_sj": {"shape": np.shape(N_sj)},
+                "eta_j": {"shape": np.shape(eta_j)},
+                "Ks_Sv": {"shape": np.shape(Ks_Sv)},
+
+                "Ij1": {"shape": np.shape(Ij1)},
+                "Ij2": {"shape": np.shape(Ij2)},
+
+                "T_sj1": {"shape": np.shape(T_sj1)},
+                "T_sj2": {"shape": np.shape(T_sj2)},
+
+                "tau_j2": {"shape": np.shape(tau_j2)},
+                "tau_tsj2": {"shape": np.shape(tau_tsj2)},
+
+                "nL1": {"shape": np.shape(nL1)},
+                "nL2": {"shape": np.shape(nL2)},
+
+                "idx1": {"shape": np.shape(idx1)},
+                "idx2": {"shape": np.shape(idx2)},
+                "idx3": {"shape": np.shape(idx3)}
+
+            }
+
+        # append the keys from temp_dict to log_dict[v]
+        for key in temp_dict:
+            log_dict[v][key] = temp_dict[key]
+    try:
     
-    #         Mi[idx3[i], 3 * Ij1[j]]     = -tau_tsj2[j, 0]
-    #         Mi[idx3[i], 3 * Ij1[j] + 1] = -tau_tsj2[j, 1]
-    #         Mi[idx3[i], 3 * Ij1[j] + 2] = -tau_tsj2[j, 2]
+        Mi[idx1, 3 * Ij1] = -nL1[:, 0]                                                           # Setting x-component differences for first volumes in Mi.
+        Mi[idx1, 3 * Ij1 + 1] = -nL1[:, 1]                                                       # Setting y-component differences for first volumes in Mi.
+        Mi[idx1, 3 * Ij1 + 2] = -nL1[:, 2]                                                       # Setting z-component differences for first volumes in Mi.
 
-    #         Mi[idx3[i], 3 * Ij2[j]]     = tau_tsj2[j, 0]
-    #         Mi[idx3[i], 3 * Ij2[j] + 1] = tau_tsj2[j, 1]
-    #         Mi[idx3[i], 3 * Ij2[j] + 2] = tau_tsj2[j, 2]
-    Mi[idx1, 3 * Ij1] = -nL1[:, 0]                                                           # Setting x-component differences for first volumes in Mi.
-    Mi[idx1, 3 * Ij1 + 1] = -nL1[:, 1]                                                       # Setting y-component differences for first volumes in Mi.
-    Mi[idx1, 3 * Ij1 + 2] = -nL1[:, 2]                                                       # Setting z-component differences for first volumes in Mi.
+        Mi[idx1, 3 * Ij2] = nL2[:, 0]                                                            # Setting x-component differences for second volumes in Mi.
+        Mi[idx1, 3 * Ij2 + 1] = nL2[:, 1]                                                        # Setting y-component differences for second volumes in Mi.
+        Mi[idx1, 3 * Ij2 + 2] = nL2[:, 2]                                                        # Setting z-component differences for second volumes in Mi.
 
-    Mi[idx1, 3 * Ij2] = nL2[:, 0]                                                            # Setting x-component differences for second volumes in Mi.
-    Mi[idx1, 3 * Ij2 + 1] = nL2[:, 1]                                                        # Setting y-component differences for second volumes in Mi.
-    Mi[idx1, 3 * Ij2 + 2] = nL2[:, 2]                                                        # Setting z-component differences for second volumes in Mi.
+        Mi[idx2, 3 * Ij1] = -T_sj1[:, 0]                                                         # Setting x-component differences in Mi.
+        Mi[idx2, 3 * Ij1 + 1] = -T_sj1[:, 1]                                                     # Setting y-component differences in Mi.
+        Mi[idx2, 3 * Ij1 + 2] = -T_sj1[:, 2]                                                     # Setting z-component differences in Mi.
 
-    Mi[idx2, 3 * Ij1] = -T_sj1[:, 0]                                                         # Setting x-component differences in Mi.
-    Mi[idx2, 3 * Ij1 + 1] = -T_sj1[:, 1]                                                     # Setting y-component differences in Mi.
-    Mi[idx2, 3 * Ij1 + 2] = -T_sj1[:, 2]                                                     # Setting z-component differences in Mi.
+        Mi[idx2, 3 * Ij2] = T_sj1[:, 0]                                                          # Setting x-component differences in Mi.
+        Mi[idx2, 3 * Ij2 + 1] = T_sj1[:, 1]                                                      # Setting y-component differences in Mi.
+        Mi[idx2, 3 * Ij2 + 2] = T_sj1[:, 2]                                                      # Setting z-component differences in Mi.
 
-    Mi[idx2, 3 * Ij2] = T_sj1[:, 0]                                                          # Setting x-component differences in Mi.
-    Mi[idx2, 3 * Ij2 + 1] = T_sj1[:, 1]                                                      # Setting y-component differences in Mi.
-    Mi[idx2, 3 * Ij2 + 2] = T_sj1[:, 2]                                                      # Setting z-component differences in Mi.
+        Mi[idx3, 3 * Ij1] = -tau_tsj2[:, 0]                                                      # Setting x-component differences in Mi.
+        Mi[idx3, 3 * Ij1 + 1] = -tau_tsj2[:, 1]                                                  # Setting y-component differences in Mi.
+        Mi[idx3, 3 * Ij1 + 2] = -tau_tsj2[:, 2]                                                  # Setting z-component differences in Mi.
 
-    Mi[idx3, 3 * Ij1] = -tau_tsj2[:, 0]                                                      # Setting x-component differences in Mi.
-    Mi[idx3, 3 * Ij1 + 1] = -tau_tsj2[:, 1]                                                  # Setting y-component differences in Mi.
-    Mi[idx3, 3 * Ij1 + 2] = -tau_tsj2[:, 2]                                                  # Setting z-component differences in Mi.
-
-    Mi[idx3, 3 * Ij2] = tau_tsj2[:, 0]                                                       # Setting x-component differences in Mi.
-    Mi[idx3, 3 * Ij2 + 1] = tau_tsj2[:, 1]                                                   # Setting y-component differences in Mi.
-    Mi[idx3, 3 * Ij2 + 2] = tau_tsj2[:, 2] 
+        Mi[idx3, 3 * Ij2] = tau_tsj2[:, 0]                                                       # Setting x-component differences in Mi.
+        Mi[idx3, 3 * Ij2 + 1] = tau_tsj2[:, 1]                                                   # Setting y-component differences in Mi.
+        Mi[idx3, 3 * Ij2 + 2] = tau_tsj2[:, 2] 
+        
+    except Exception as e:
+        logger.log(f"Error setting LS matrices for point {v}: {e}", "ERROR")
+        logger.json(str(v), log_dict[v])
+        raise e
     

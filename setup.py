@@ -38,9 +38,9 @@ ext_data = [
             ]
         ),
         Extension(
-            name = f'{project_name}._methods.inv_dist',
+            name = f'{project_name}._methods.idw',
             sources = [
-                os.path.join(directory_path, project_name, '_methods', 'inv_dist.pyx')
+                os.path.join(directory_path, project_name, '_methods', 'idw.pyx')
             ],
             include_dirs = [
                 np.get_include()
@@ -50,6 +50,15 @@ ext_data = [
             name = f'{project_name}._methods.gls',
             sources = [
                 os.path.join(directory_path, project_name, '_methods', 'gls.pyx')
+            ],
+            include_dirs = [
+                np.get_include()
+            ]
+        ),
+        Extension(
+            name = f'{project_name}._interpolator.logger',
+            sources = [
+                os.path.join(directory_path, project_name, '_interpolator', 'logger.pyx')
             ],
             include_dirs = [
                 np.get_include()

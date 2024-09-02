@@ -67,7 +67,7 @@ class TestPerformance:
             interpolador.load_mesh(os.path.join(mesh_dir, filename))
 
         def interpolate(interpolador, points):
-            interpolador.interpolate("linear", "gls")
+            interpolador.interpolate("u", "gls")
         
         def average_memory(func):
             average = 0

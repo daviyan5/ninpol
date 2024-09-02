@@ -23,10 +23,10 @@ compile_debug:
 	@echo "Compilling in debug mode..."
 	@python3 setup.py build_ext --inplace --debug
 	@echo "Done"
-test_create:
+create:
 	@echo "Creating vtk files..."
 	@python3 tests/utils/create_vtk.py
-
+test_create: create
 	@echo "Testing..."
 	@pytest -s --tb=short
 

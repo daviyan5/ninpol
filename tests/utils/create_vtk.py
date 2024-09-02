@@ -13,8 +13,9 @@ def calculate_properties(centroids, is_box=False):
     linear              = analytical.linear(centroids)
     quadratic           = analytical.quadratic(centroids)
     quarter_five_spot   = analytical.quarter_five_spot(centroids, is_box)
+    lu                  = analytical.u(centroids)
 
-    return linear, quadratic, quarter_five_spot
+    return linear, quadratic, quarter_five_spot, lu
 
 def block_print():
     sys.stdout = open(os.devnull, 'w')
@@ -40,19 +41,21 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
 
     n_cells = 0
     connectivity = None
+    permeability = []
     linear = []
     quadratic = []
-    permeability = []
     quarter_five_spot = []
+    u = []
     for cell_type in mesh.cells:
         n_cells = len(cell_type.data)
         cell_type.data = cell_type.data.astype(int)
         connectivity = cell_type.data
 
         centroids = np.mean(mesh.points[connectivity], axis=1)
-        lp, q, q5 = calculate_properties(centroids, "box" in file_name)
+        lp, q, q5, lu = calculate_properties(centroids, "box" in file_name)
         linear.append(lp)
         quadratic.append(q)
+        u.append(lu)
         K = np.ndarray((n_cells, 3 * 3))
         K[:] = np.array([1.0, 0.5, 0,
                          0.5, 1.0, 0.5,
@@ -69,27 +72,38 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
     neumann_flag = np.zeros(grid_obj.n_points, dtype=int)
     dirichlet_flag = np.zeros(grid_obj.n_points, dtype=int)
 
-    neumann_l      = np.zeros(grid_obj.n_points)
-    dirichlet_l      = np.zeros(grid_obj.n_points)
+    neumann_l    = np.zeros(grid_obj.n_points)
+    dirichlet_l  = np.zeros(grid_obj.n_points)
+    source_l     = np.zeros(grid_obj.n_points)
 
-    neumann_q      = np.zeros(grid_obj.n_points)
-    dirichlet_q      = np.zeros(grid_obj.n_points)
+    neumann_q    = np.zeros(grid_obj.n_points)
+    dirichlet_q  = np.zeros(grid_obj.n_points)
+    source_q     = np.zeros(grid_obj.n_points)
 
-    neumann_q5      = np.zeros(grid_obj.n_points)
-    dirichlet_q5      = np.zeros(grid_obj.n_points)
+    neumann_q5   = np.zeros(grid_obj.n_points)
+    dirichlet_q5 = np.zeros(grid_obj.n_points)
+    source_q5    = np.zeros(grid_obj.n_points)
+
+    neumann_u    = np.zeros(grid_obj.n_points)
+    dirichlet_u  = np.zeros(grid_obj.n_points)
+    source_u     = np.zeros(grid_obj.n_points)
     
     for face in range(grid_obj.n_faces):
         if grid_obj.boundary_faces[face]:
             psuf = np.asarray(grid_obj.inpofa[face])
             psuf = psuf[psuf != -1]
-            rd = 1.2# p.random.rand()
-            if rd < (0.3 if not "box" in file_name else 1.0):
+            rd = np.random.rand()
+            if rd < 0.6:
                 neumann_flag[psuf] = True
+                
                 neumann_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                            "linear", "neumann")
                 
                 neumann_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                            "quadratic", "neumann", normal=grid_obj.normal_faces[face])
+
+                neumann_u[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
+                                                                           "u", "neumann", normal=grid_obj.normal_faces[face])
                 
                 if "box" in file_name:
                     neumann_q5[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
@@ -97,34 +111,52 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
             else:
                 psuf = psuf[neumann_flag[psuf] == 0]
                 dirichlet_flag[psuf] = True
-                
+        
                 dirichlet_l[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                             "linear", "dirichlet")
 
                 dirichlet_q[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                             "quadratic", "dirichlet")
                 
+                dirichlet_u[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
+                                                                            "u", "dirichlet")
+                
                 if "box" in file_name:
                     dirichlet_q5[psuf] = analytical.get_bc(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3),
                                                                             "quarter_five_spot", "dirichlet")
+            
+            source_l = analytical.get_source(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3), "linear")
+            source_q = analytical.get_source(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3), "quadratic")
+            source_u = analytical.get_source(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3), "u")
+            if "box" in file_name:
+                source_q5 = analytical.get_source(grid_obj.faces_centers[face], permeability[0][0].reshape(3, 3), "quarter_five_spot")
     
     # Add properties to cell data
     cell_data = {
         "linear": linear,
         "quadratic": quadratic,
+        "u": u,
         "permeability": list(permeability)
     }
+    
     point_data = {
         "neumann_flag": neumann_flag,
         "dirichlet_flag": dirichlet_flag,
 
         "neumann_linear": neumann_l,
         "dirichlet_linear": dirichlet_l,
+
         "neumann_quadratic": neumann_q,
         "dirichlet_quadratic": dirichlet_q,
+
+        "neumann_u": neumann_u,
+        "dirichlet_u": dirichlet_u
         
     }
     if "box" in file_name:
+        cell_data  = {}
+        point_data = {}
+
         cell_data["quarter_five_spot"] = quarter_five_spot
         point_data["neumann_quarter_five_spot"]   = neumann_q5
         point_data["dirichlet_quarter_five_spot"] = dirichlet_q5

@@ -4,7 +4,7 @@ from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from libc.stdio cimport printf
 from libc.math cimport sqrt
 
-cdef void distance_inverse(const int dim,
+cdef void inverse_distance(const int dim,
                            const DTYPE_F_t[:, ::1] target_coordinates, 
                            const DTYPE_F_t[:, ::1] source_coordinates,
                            const DTYPE_I_t[:, ::1] connectivity_idx,

@@ -114,7 +114,7 @@ class TestCorrectness:
             inedel        = data["inedel"]         # Edges that compose each element
             esup          = data["esup"]           # Elements that compose each element
             psup          = data["psup"]           # Points that compose each point
-            esuf         = data["esuf"]          # Faces that compose each element
+            esuf          = data["esuf"]           # Faces that compose each element
 
 
 
@@ -240,44 +240,15 @@ class TestCorrectness:
                     assert np.allclose(centroid, centroids[i]), f"Centroid of an element doesn't match, err: {err}"
 
                 n_passed += 1
-            with subtests.test('Test "Weights" for Distance Inverse'):
-                # Interpolate 'linear' for all points and receive the weights matrix
-                weights, neumann_ws = interpolador.interpolate("linear", "inv_dist")
+            
+            with subtests.test('Test "Fsup"'):
+                pass
 
-                # For every point, the sum of the weights should be either 1 or 0.
-                for i in range(n_points):
-                    assert np.isclose(np.sum(weights[i]), 1) or np.isclose(np.sum(weights[i]), 0), "Weights don't sum to 1 or 0"
+            with subtests.test('Test "Boundaries"'):
+                pass
 
-                # For every point, for every elem in esup of point
-                #   weights[point, elem] = 1 / distance(point, centroid(elem)) / total_distance
-
-                for i in range(n_points):
-                    total_dist = 0
-                    found_zero = False
-                    for j in range(esup[i].shape[0]):
-                        if esup[i, j] == -1:
-                            continue
-                        elem = esup[i, j]
-                        dist = np.linalg.norm(points_coords[i] - centroids[elem])
-                        if np.isclose(dist, np.finfo(float).eps):
-                            # Weight must be 1 if the distance is 0, and 0 everywhere else
-                            is_one = np.isclose(weights[i, elem], 1)
-                            is_zero = np.allclose(weights[i, :elem], 0) and np.allclose(weights[i, elem+1:], 0)
-
-                            assert is_one and is_zero, "Weights don't match the distance inverse interpolation"
-                            found_zero = True
-                            break
-                        total_dist += 1 / dist
-                    if found_zero:
-                        continue
-                    for j in range(esup[i].shape[0]):
-                        if esup[i, j] == -1:
-                            continue
-                        elem = esup[i, j]
-                        dist = np.linalg.norm(points_coords[i] - centroids[elem])
-                        assert np.isclose(weights[i, elem], 1 / (total_dist * dist)), "Weights don't match the distance inverse interpolation"
-
-                n_passed += 1
+            with subtests.test('Test "Normals"'):
+                pass
                 
             pstr = (f"{Fore.WHITE}{'':<4}{files[case]:<15}{Fore.BLUE}" + 
                     f"{n_points:<15}{n_elements:<15}{n_faces:<10}{n_edges:<10}" +

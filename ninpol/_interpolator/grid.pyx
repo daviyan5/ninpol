@@ -10,9 +10,8 @@ from cython.parallel import prange
 from libc.math cimport sqrt
 from libc.stdio cimport printf
 
-cdef:
-    type DTYPE_I = np.int64
-    type DTYPE_F = np.float64
+DTYPE_I = np.int64
+DTYPE_F = np.float64
 
 cdef class Grid:
     def __cinit__(self, DTYPE_I_t dim, 
@@ -47,22 +46,22 @@ cdef class Grid:
                 raise ValueError(f"The array must have shape {expected_shape}, not {array.shape}.")
             return array.copy()
 
-        _validate_shape(npoel, (NINPOL_NUM_ELEMENT_TYPES,))
+        _validate_shape(npoel, (NinpolSizes.NINPOL_NUM_ELEMENT_TYPES,))
         self.npoel = npoel.copy()
 
-        _validate_shape(nfael, (NINPOL_NUM_ELEMENT_TYPES,))
+        _validate_shape(nfael, (NinpolSizes.NINPOL_NUM_ELEMENT_TYPES,))
         self.nfael = nfael.copy()
 
-        _validate_shape(lnofa, (NINPOL_NUM_ELEMENT_TYPES, NINPOL_MAX_FACES_PER_ELEMENT))
+        _validate_shape(lnofa, (NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT))
         self.lnofa = lnofa.copy()
 
-        _validate_shape(lpofa, (NINPOL_NUM_ELEMENT_TYPES, NINPOL_MAX_FACES_PER_ELEMENT, NINPOL_MAX_POINTS_PER_FACE))
+        _validate_shape(lpofa, (NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT, NinpolSizes.NINPOL_MAX_POINTS_PER_FACE))
         self.lpofa = lpofa.copy()
 
-        _validate_shape(nedel, (NINPOL_NUM_ELEMENT_TYPES,))
+        _validate_shape(nedel, (NinpolSizes.NINPOL_NUM_ELEMENT_TYPES,))
         self.nedel = nedel.copy()
 
-        _validate_shape(lpoed, (NINPOL_NUM_ELEMENT_TYPES, NINPOL_MAX_EDGES_PER_ELEMENT, NINPOL_MAX_POINTS_PER_EDGE))
+        _validate_shape(lpoed, (NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE))
         self.lpoed = lpoed.copy()
 
         self.inpoel         = connectivity.copy()
@@ -177,7 +176,7 @@ cdef class Grid:
         self.psup_ptr[0] = 0
     
         # Upper bound for the number of points surrounding each point, pehaps this can be improved
-        self.psup = np.zeros((self.esup_ptr[self.n_points] * (NINPOL_MAX_POINTS_PER_ELEMENT - 1)), dtype=DTYPE_I) 
+        self.psup = np.zeros((self.esup_ptr[self.n_points] * (NinpolSizes.NINPOL_MAX_POINTS_PER_ELEMENT - 1)), dtype=DTYPE_I) 
 
         # Calculate the points surrounding each point, using temp_psup to avoid duplicates
         for i in range(self.n_points):
@@ -205,11 +204,11 @@ cdef class Grid:
             int elem_type
 
             # Stores the points (in relation to the global point index) of the face
-            DTYPE_I_t[::1] elem_face = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] sorted_elem_face = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] sorted_elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
             # Stores the index of the points in the element (in relation to the element's local point index)
-            DTYPE_I_t[::1] elem_face_index = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] elem_face_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
             # Stores the string representation of the face, for hashing
             str elem_face_str
@@ -219,10 +218,10 @@ cdef class Grid:
             int unused_spaces
             int face_index = 0
 
-            int faces_upper_bound = self.n_elems * NINPOL_MAX_FACES_PER_ELEMENT
+            int faces_upper_bound = self.n_elems * NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT
 
-        self.inpofa = np.ones((faces_upper_bound, NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
-        self.infael = np.ones((self.n_elems, NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
+        self.inpofa = np.ones((faces_upper_bound, NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
+        self.infael = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
 
         # For each element
         for i in range(self.n_elems):
@@ -236,10 +235,10 @@ cdef class Grid:
                 for k in range(self.lnofa[elem_type, j]):
                     elem_face[k] = self.inpoel[i, elem_face_index[k]]
 
-                unused_spaces = NINPOL_MAX_POINTS_PER_FACE - self.lnofa[elem_type, j]
+                unused_spaces = NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - self.lnofa[elem_type, j]
 
                 for k in range(unused_spaces):
-                    elem_face[NINPOL_MAX_POINTS_PER_FACE - k - 1] = -1
+                    elem_face[NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - k - 1] = -1
 
                 sorted_elem_face = np.sort(elem_face)
                 for k in range(self.lnofa[elem_type, j]):
@@ -272,7 +271,7 @@ cdef class Grid:
         self.fsup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
 
         for i in range(self.n_faces):
-            for j in range(NINPOL_MAX_POINTS_PER_FACE):
+            for j in range(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE):
                 if self.inpofa[i, j] == -1:
                     break
                 point = self.inpofa[i, j]
@@ -285,7 +284,7 @@ cdef class Grid:
 
         self.fsup = np.zeros(self.fsup_ptr[self.n_points], dtype=DTYPE_I)
         for i in range(self.n_faces):
-            for j in range(NINPOL_MAX_POINTS_PER_FACE):
+            for j in range(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE):
                 if self.inpofa[i, j] == -1:
                     break
                 point = self.inpofa[i, j]
@@ -372,11 +371,11 @@ cdef class Grid:
             int ielem, jelem
             int ielem_type, jelem_type
             int unused_spaces
-            DTYPE_I_t[::1] ielem_face = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] jelem_face = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] ielem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] jelem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
-            DTYPE_I_t[::1] ielem_face_index = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] jelem_face_index = np.zeros(NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] ielem_face_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] jelem_face_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
             int point, kpoint
             int num_elems, num_elems_min
@@ -385,7 +384,7 @@ cdef class Grid:
             int is_equal 
 
             
-        self.esuel = np.ones((self.n_elems, NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
+        self.esuel = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
 
         # For each element
         for ielem in range(self.n_elems):
@@ -402,10 +401,10 @@ cdef class Grid:
                 for k in range(self.lnofa[ielem_type, j]):
                     ielem_face[k] = self.inpoel[ielem, ielem_face_index[k]]
                 
-                unused_spaces = NINPOL_MAX_POINTS_PER_FACE - self.lnofa[ielem_type, j]
+                unused_spaces = NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - self.lnofa[ielem_type, j]
 
                 for k in range(unused_spaces):
-                    ielem_face[NINPOL_MAX_POINTS_PER_FACE - k - 1] = -1
+                    ielem_face[NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - k - 1] = -1
 
                 point = ielem_face[0]
                 num_elems_min = self.esup_ptr[point+1] - self.esup_ptr[point]
@@ -463,11 +462,11 @@ cdef class Grid:
             int elem_type
 
             # Stores the points (in relation to the global point index) of the edge
-            DTYPE_I_t[::1] elem_edge = np.zeros(NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] sorted_elem_edge = np.zeros(NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] elem_edge = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] sorted_elem_edge = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
 
             # Stores the index of the points in the element (in relation to the element's local point index)
-            DTYPE_I_t[::1] elem_edge_index = np.zeros(NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
+            DTYPE_I_t[::1] elem_edge_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
 
             # Stores the string representation of the edge, for hashing
             str elem_edge_str
@@ -476,9 +475,9 @@ cdef class Grid:
             int current_edge_index = 0
             int edge_index = 0
 
-        self.inedel = np.ones((self.n_elems, NINPOL_MAX_EDGES_PER_ELEMENT), dtype=DTYPE_I) * -1
-        self.inpoed = np.ones((self.n_elems * NINPOL_MAX_EDGES_PER_ELEMENT, 
-                               NINPOL_MAX_POINTS_PER_EDGE), dtype=DTYPE_I) * -1
+        self.inedel = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT), dtype=DTYPE_I) * -1
+        self.inpoed = np.ones((self.n_elems * NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 
+                               NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE), dtype=DTYPE_I) * -1
         
         # For each element
         for i in range(self.n_elems):
@@ -490,11 +489,11 @@ cdef class Grid:
                 elem_edge_index = self.lpoed[elem_type, j]
 
                 # Assume there's the exacly same amount of points in each edge (usually 2)
-                for k in range(NINPOL_MAX_POINTS_PER_EDGE):
+                for k in range(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE):
                     elem_edge[k] = self.inpoel[i, elem_edge_index[k]]
 
                 sorted_elem_edge = np.sort(elem_edge)
-                for k in range(NINPOL_MAX_POINTS_PER_EDGE):
+                for k in range(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE):
                     elem_edge_str += str(sorted_elem_edge[k]) + ","
                 
                 if edges_dict.get(elem_edge_str) is None:
@@ -502,7 +501,7 @@ cdef class Grid:
                     current_edge_index += 1
                     edges_dict[elem_edge_str] = edge_index
 
-                    for k in range(NINPOL_MAX_POINTS_PER_EDGE):
+                    for k in range(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE):
                         self.inpoed[edge_index, k] = elem_edge[k]
 
                 else:
@@ -531,14 +530,28 @@ cdef class Grid:
             warnings.warn("The centroids have not been calculated.")
 
         data = {
-            'inpoel':        self.inpoel.copy(),
-            'element_types': self.element_types.copy(),
-            'inpofa':        self.inpofa.copy(),
-            'infael':        self.infael.copy(),
-            'inpoed':        self.inpoed.copy(),
-            'inedel':        self.inedel.copy(),
-            'point_coords':  self.point_coords.copy(),
-            'centroids':     self.centroids.copy()
+            'n_elems':                  self.n_elems,
+            'n_points':                 self.n_points,
+            'n_faces':                  self.n_faces,
+            'n_edges':                  self.n_edges,
+            'MX_ELEMENTS_PER_POINT':    self.MX_ELEMENTS_PER_POINT,
+            'MX_POINTS_PER_POINT':      self.MX_POINTS_PER_POINT,
+            'MX_ELEMENTS_PER_FACE':     self.MX_ELEMENTS_PER_FACE,
+            'MX_FACES_PER_POINT':       self.MX_FACES_PER_POINT,
+            'point_coords':             self.point_coords.copy(),
+            'centroids':                self.centroids.copy(),
+            'normal_faces':             self.normal_faces.copy(),
+            'faces_centers':            self.faces_centers.copy(),
+            'boundary_faces':           self.boundary_faces.copy(),
+            'boundary_points':          self.boundary_points.copy(),
+            'inpoel':                   self.inpoel.copy(),
+            'element_types':            self.element_types.copy(),
+            'inpofa':                   self.inpofa.copy(),
+            'infael':                   self.infael.copy(),
+            'inpoed':                   self.inpoed.copy(),
+            'inedel':                   self.inedel.copy(),
+            'point_coords':             self.point_coords.copy(),
+            'centroids':                self.centroids.copy()
         }
 
         # Converts the data that needs pointers (e.g esup) to bi-dimensional arrays
@@ -548,6 +561,7 @@ cdef class Grid:
             DTYPE_I_t[:, ::1] esup2d = np.ones((self.n_points, self.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
             DTYPE_I_t[:, ::1] psup2d = np.ones((self.n_points, self.MX_POINTS_PER_POINT),   dtype=DTYPE_I) * -1
             DTYPE_I_t[:, ::1] esuf2d = np.ones((self.n_faces, self.MX_ELEMENTS_PER_FACE),   dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] fsup2d = np.ones((self.n_points, self.MX_FACES_PER_POINT),    dtype=DTYPE_I) * -1
 
         for i in range(self.n_points):
             for j in range(self.esup_ptr[i], self.esup_ptr[i+1]):
@@ -555,6 +569,9 @@ cdef class Grid:
 
             for j in range(self.psup_ptr[i], self.psup_ptr[i+1]):
                 psup2d[i, j - self.psup_ptr[i]] = self.psup[j]
+            
+            for j in range(self.fsup_ptr[i], self.fsup_ptr[i+1]):
+                fsup2d[i, j - self.fsup_ptr[i]] = self.fsup[j]
         
         for i in range(self.n_faces):
             for j in range(self.esuf_ptr[i], self.esuf_ptr[i+1]):
@@ -563,9 +580,11 @@ cdef class Grid:
         data['esup']  = esup2d.copy()
         data['psup']  = psup2d.copy()
         data['esuf']  = esuf2d.copy()
+        data['fsup']  = fsup2d.copy()
 
         for key in data:
-            data[key] = np.asarray(data[key])
+            if not isinstance(data[key], int) and not isinstance(data[key], float):
+                data[key] = np.asarray(data[key])
 
         return data
         
@@ -615,7 +634,7 @@ cdef class Grid:
         omp_set_num_threads(use_threads)
         for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
             npofa = 0
-            for j in range(NINPOL_MAX_POINTS_PER_FACE):
+            for j in range(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE):
                 if self.inpofa[i, j] == -1:
                     break
                 npofa = npofa + 1

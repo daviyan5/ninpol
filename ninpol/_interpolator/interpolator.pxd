@@ -11,7 +11,9 @@ from cython.parallel cimport parallel, prange
 cimport openmp
 
 from .grid cimport Grid
-from .._methods.inv_dist cimport distance_inverse
+from .logger cimport Logger
+
+from .._methods.idw cimport inverse_distance
 from .._methods.gls cimport GLS
 
 ctypedef cnp.int64_t DTYPE_I_t
@@ -34,7 +36,9 @@ cdef class Interpolator:
 
     cdef readonly DTYPE_F_t[:, ::1] points_data
     cdef readonly DTYPE_I_t[::1] points_data_dimensions
-     
+    
+    cdef readonly int logging
+    cdef readonly Logger logger
 
     cdef readonly int is_grid_initialized
 

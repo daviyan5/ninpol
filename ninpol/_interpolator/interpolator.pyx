@@ -9,13 +9,14 @@ import scipy.sparse as sp
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from cython.parallel import prange
 
+
 DTYPE_I = np.int64
 DTYPE_F = np.float64
 
 
 cdef class Interpolator:
 
-    def __cinit__(self, str filename = ""):
+    def __cinit__(self, str name = "interpolator", int logging = False):
         # Load point-ordering.yaml 
         import yaml
         import os
@@ -32,7 +33,7 @@ cdef class Interpolator:
         self.is_grid_initialized = False
 
         self.supported_methods = {
-            "inv_dist": distance_inverse,
+            "idw": inverse_distance,
             "gls": GLS
         }
 
@@ -52,14 +53,18 @@ cdef class Interpolator:
         self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
-        if filename != "":
-            self.load_mesh(filename)
+        self.logging = logging
+        self.logger  = Logger(name)
+
     
     def load_mesh(self, str filename = ""):
         if filename == "":
-            raise ValueError("Either 'filename' or 'mesh' must be provided.")
+            raise ValueError("filename for the mesh must be provided.")
         # Loads a mesh from a file
         
+        if self.logging:
+            self.logger.log(f"Loading mesh from {filename}", "INFO")
+
         self.mesh_obj = meshio.read(filename)
 
         cdef tuple args = self.process_mesh(self.mesh_obj)
@@ -84,6 +89,16 @@ cdef class Interpolator:
             self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
         self.is_grid_initialized = True
+
+        if self.logging:
+            self.logger.log(f"Mesh loaded successfully: {self.grid_obj.n_points} points", "INFO")
+            if self.grid_obj.n_points < 10000:
+                self.logger.json("grid", self.grid_obj.get_data())
+
+                self.logger.json("interpolator", self.get_dict())
+                self.logger.log("Grid loaded successfully", "INFO")
+            else:
+                self.logger.log("Grid too large to be logged", "WARN")
         
     def process_mesh(self, object mesh):
         cdef:
@@ -104,21 +119,21 @@ cdef class Interpolator:
             dict elem_type
             int type_index, i, j
 
-            DTYPE_I_t[::1] npoel       = np.ones(NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] npoel       = np.ones(NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[::1] nfael       = np.ones( NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] nfael       = np.ones( NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[:, ::1] lnofa    = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
-                                                  NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] lnofa    = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[:, :, ::1] lpofa = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
-                                                  NINPOL_MAX_FACES_PER_ELEMENT, 
-                                                  NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, :, ::1] lpofa = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT, 
+                                                  NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[::1] nedel       = np.ones( NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] nedel       = np.ones( NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[:, :, ::1] lpoed = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
-                                                  NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, :, ::1] lpoed = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
 
 
         
@@ -174,7 +189,7 @@ cdef class Interpolator:
 
             int elem_type_index
             
-            DTYPE_I_t[:, ::1] connectivity   = np.ones((n_elems, NINPOL_MAX_POINTS_PER_ELEMENT), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] connectivity   = np.ones((n_elems, NinpolSizes.NINPOL_MAX_POINTS_PER_ELEMENT), dtype=DTYPE_I) * -1
             DTYPE_I_t[::1] element_types     = np.ones(n_elems, dtype=DTYPE_I) * -1
         
         for CellBlock in mesh.cells:
@@ -285,13 +300,38 @@ cdef class Interpolator:
 
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability):
         cdef:
-            nvols = len(permeability)
+            int nvols = len(permeability)
             DTYPE_F_t[:, :, ::1] Ks = np.reshape(permeability, (nvols, 3, 3))                                    
             cnp.ndarray detKs = np.linalg.det(Ks)                                                          
             cnp.ndarray trKs  = np.trace(Ks, axis1=1, axis2=2)                                                   
             DTYPE_F_t[::1] diff_mag = (1 - (3 * (detKs ** (1 / 3)) / trKs)) ** 2      
 
         return diff_mag   
+
+    def get_dict(self):
+        cdef dict data_dict
+
+        data_dict = {
+            "point_ordering": self.point_ordering,
+
+            "variable_to_index": self.variable_to_index,
+
+            "cells_data": self.cells_data,
+            "cells_data_dimensions": self.cells_data_dimensions,
+
+            "points_data": self.points_data,
+            "points_data_dimensions": self.points_data_dimensions,
+        }
+
+        # Convert memoryviews to np arrays
+        data_dict["cells_data"] = np.asarray(data_dict["cells_data"])
+        data_dict["cells_data_dimensions"] = np.asarray(data_dict["cells_data_dimensions"])
+
+        data_dict["points_data"] = np.asarray(data_dict["points_data"])
+        data_dict["points_data_dimensions"] = np.asarray(data_dict["points_data_dimensions"])
+        # Print type of every variable
+        
+        return data_dict
 
     def get_data(self, str data_type, DTYPE_I_t[::1] index, str variable):
         cdef int data_index = 0
@@ -336,6 +376,9 @@ cdef class Interpolator:
             DTYPE_I_t[:, ::1] connectivity_idx
             DTYPE_F_t[::1] neumann_ws
 
+        if self.logging:
+            self.logger.log(f"Interpolating variable '{variable}' using method '{method}'", "INFO")
+
         # The value of the interpolation is the product of the lines of the 
         # weight matrix with the lines of the connectivity matrix, and the sum of the results for each line
         weights, connectivity_idx, neumann_ws = self.prepare_interpolator(method, variable, data_dimension, target_points)
@@ -356,6 +399,18 @@ cdef class Interpolator:
             int use_threads = min(8, np.ceil(n_target / 800))
 
             int MX_ELEMENTS_PER_POINT = self.grid_obj.MX_ELEMENTS_PER_POINT
+        
+        cdef:
+            dict data_dict
+            
+        if self.logging:
+            self.logger.log(f"Interpolation prepared successfully", "INFO")
+            data_dict = {
+                "weights": np.asarray(weights),
+                "connectivity_idx": np.asarray(connectivity_idx),
+                "neumann_ws": np.asarray(neumann_ws)
+            }
+            self.logger.json(method + "_" + variable, data_dict)
 
         if return_value:
             
@@ -433,6 +488,7 @@ cdef class Interpolator:
             last = self.grid_obj.esup_ptr[point + 1]
             for j, elem in enumerate(self.grid_obj.esup[first:last]):
                 connectivity_idx[i, j] = elem
+
         if method == "gls":
             
             in_points     = np.where(np.asarray(self.grid_obj.boundary_points) == 0)[0]
@@ -460,7 +516,7 @@ cdef class Interpolator:
                 weights, neumann_ws
             )
 
-        if method == "inv_dist":
+        if method == "idw":
             self.supported_methods[method](
                 dim,
                 target_coordinates, source_coordinates, 

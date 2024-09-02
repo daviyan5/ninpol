@@ -32,8 +32,8 @@ def l2norm_array(measure, reference):
     sqr_sum = np.sum(reference ** 2)
     return np.sqrt(((measure - reference) ** 2) / sqr_sum) 
 
-FUNCTIONS = [analytical.linear, analytical.quadratic, analytical.quarter_five_spot]
-NAMES     = ["linear", "quadratic", "quarter_five_spot"]
+FUNCTIONS = [analytical.linear, analytical.quadratic, analytical.quarter_five_spot, analytical.u]
+NAMES     = ["linear", "quadratic", "quarter_five_spot", "u"]
 
 class TestAccuracy:
     
@@ -60,7 +60,7 @@ class TestAccuracy:
         for case in range(n_files):
             print(f"{Fore.BLUE}{files[case]:<15}{f'{case}/{n_files}':<10}{Style.RESET_ALL}")
 
-            interpolador = ninpol.Interpolator()
+            interpolador = ninpol.Interpolator(name="accuracy_test_" + str(case), logging=True)
             interpolador.load_mesh(mesh_dir + files[case])
             
             points_coords = np.asarray(interpolador.grid_obj.point_coords)
@@ -75,9 +75,11 @@ class TestAccuracy:
 
             for method in interpolador.supported_methods.keys():
                 results_dict["files"][files[case]]["methods"][method] = {}
+                if method == "idw":
+                    continue
                 for function, name in zip(FUNCTIONS, NAMES):
                     
-                    if name not in msh.cell_data or name not in ["linear", "quadratic", "quarter_five_spot"]:
+                    if name not in msh.cell_data or name not in NAMES:
                         continue
                         
                     reference = function(points_coords)

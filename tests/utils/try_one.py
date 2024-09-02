@@ -26,7 +26,7 @@ def load_process_build(interpolador, mesh_dir, filename):
     interpolador.load_mesh(os.path.join(mesh_dir, filename))
 
 def interpolate(interpolador, points):
-    interpolador.interpolate("quarter_five_spot", "inv_dist", return_value=True)
+    interpolador.interpolate("quarter_five_spot", "idw", return_value=True)
 
 def l2norm_relative(measure, reference):
     sqr_sum = np.sum(reference ** 2)
@@ -38,4 +38,4 @@ interpolador = ninpol.Interpolator()
 interpolador.load_mesh(mesh_file)
 point_coords = np.asarray(interpolador.grid_obj.point_coords)
 points = np.arange(point_coords.shape[0])
-measure = np.asarray(interpolador.interpolate('linear', 'inv_dist', return_value=True))
+measure = np.asarray(interpolador.interpolate('linear', 'idw', return_value=True))
