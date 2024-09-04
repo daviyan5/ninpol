@@ -92,7 +92,7 @@ def process_mesh_file(file_name, file_path, output_dir, temp_output_dir):
         if grid_obj.boundary_faces[face]:
             psuf = np.asarray(grid_obj.inpofa[face])
             psuf = psuf[psuf != -1]
-            rd = np.random.rand()
+            rd = 1 #np.random.rand()
             if rd < 0.6:
                 neumann_flag[psuf] = True
                 

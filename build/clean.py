@@ -50,7 +50,7 @@ while True:
                     index += 1
 
         # Move every .so, .html, .c file to ./backup
-        move_files_by_extension(parent_path, backup_path, ('.so', '.html', '.c'))
+        move_files_by_extension(parent_path, backup_path, ('.so', '.html', '.c', '.cpp'))
 
         print("Script completed successfully.")
         break

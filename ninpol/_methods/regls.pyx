@@ -20,7 +20,7 @@ cdef class GLSInterpolation:
         self.logger   = Logger("GLS")
 
     cdef void GLS(self, Grid grid, const DTYPE_I_t[::1] points, 
-                  const DTYPE_F_t[:, :, ::1] permeability, 
+                  DTYPE_F_t[:, :, ::1] permeability, 
                   const DTYPE_F_t[::1] diff_mag, 
                   const DTYPE_I_t[::1] neumann_point, const DTYPE_F_t[::1] neumann_val,
                   DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
@@ -30,13 +30,13 @@ cdef class GLSInterpolation:
             int n_points = points.shape[0]
         
         cdef:
-            DTYPE_I_t[::1] KSetv
-            DTYPE_I_t[::1] Sv
-            DTYPE_I_t[::1] Svb
+            DTYPE_I_t[::1] KSetv = self.array((1,), "i")
+            DTYPE_I_t[::1] Sv    = self.array((1,), "i")
+            DTYPE_I_t[::1] Svb   = self.array((1,), "i")
         
         cdef:
-            DTYPE_I_t[:, ::1] Mi
-            DTYPE_I_t[:, ::1] Ni
+            DTYPE_F_t[:, ::1] Mi = self.array((1, 1), "d")
+            DTYPE_F_t[:, ::1] Ni = self.array((1, 1), "d")
 
         if self.logging:
             self.logger.log(f"Starting GLS interpolation over {len(points)} points", "INFO")
@@ -46,7 +46,7 @@ cdef class GLSInterpolation:
             self.build_ls_matrices(grid, point, KSetv, Sv, Svb, permeability, diff_mag, Mi, Ni)
             if neumann_point[point]:
                 self.set_neumann_rows(grid, point, KSetv, Sv, Svb, permeability, neumann_val, Mi, Ni)
-            self.solve_ls(Mi, Ni, weights, neumann_ws)
+            self.solve_ls(point, neumann_point[point], Mi, Ni, weights, neumann_ws)
             if self.logging:
                 self.log_dict[point] = {
                     "point": point,
@@ -68,7 +68,7 @@ cdef class GLSInterpolation:
                         pass
             self.logger.json("Points", self.log_dict)
 
-    cdef void array(self, const tuple shape, const str t):
+    cdef view.array array(self, tuple shape, str t):
         if t == 'i':
             return view.array(shape=shape, itemsize=sizeof(DTYPE_I_t), format="i", mode='c')
         elif t == 'd':
@@ -76,7 +76,7 @@ cdef class GLSInterpolation:
         else:
             raise ValueError("Invalid type")
 
-    cdef void build_ks_sv_arrays(self, const Grid grid, int point, 
+    cdef void build_ks_sv_arrays(self, Grid grid, int point, 
                                  DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb):
         cdef:
             int i, j
@@ -106,10 +106,10 @@ cdef class GLSInterpolation:
                 Svb[j] = face
                 j += 1
 
-    cdef void build_ls_matrices(self, const Grid grid, int point, 
+    cdef void build_ls_matrices(self, Grid grid, int point, 
                                 const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb,
-                                const DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
-                                DTYPE_I_t[:, ::1] Mi, DTYPE_I_t[:, ::1] Ni):
+                                DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
+                                DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni):
 
         cdef:
             int n_elems  = KSetv.shape[0]
@@ -124,7 +124,9 @@ cdef class GLSInterpolation:
 
         for i in range(n_elems):
             xK[i] = grid.centroids[KSetv[i]]
-            dKv[i] = xK[i] - xv
+            dKv[i, 0] = xK[i, 0] - xv[0]
+            dKv[i, 1] = xK[i, 1] - xv[1]
+            dKv[i, 2] = xK[i, 2] - xv[2]
         
         for i in range(n_elems):
             for j in range(0, 3 * n_elems, 3):
@@ -148,10 +150,15 @@ cdef class GLSInterpolation:
             DTYPE_F_t[::1] tau_j2      = self.array((n_faces - n_bfaces,), "d")
             DTYPE_F_t[:, ::1] tau_tsj2 = self.array((n_faces - n_bfaces, 3), "d")
 
-            DTYPE_F_t[::1] nL1 = self.array((n_faces - n_bfaces,), "d")
-            DTYPE_F_t[::1] nL2 = self.array((n_faces - n_bfaces,), "d")
+            DTYPE_F_t[:, ::1] nL1 = self.array((n_faces - n_bfaces,), "d")
+            DTYPE_F_t[:, ::1] nL2 = self.array((n_faces - n_bfaces,), "d")
         
         j = 0
+        cdef:
+            int n_dot = 3, m_dot = 3
+            int incx = 1,  incy = 1
+            DTYPE_F_t alpha = 1.0, beta = 0.0
+
         for i in range(n_faces):
             
             n_esuf = grid.esuf_ptr[Sv[i] + 1] - grid.esuf_ptr[Sv[i]]
@@ -171,14 +178,15 @@ cdef class GLSInterpolation:
             T_sj1[j, 2] = xv[2] - xS[j, 2]
             
             T_sj2[j]    = self.cross(N_sj[j], T_sj1[j])  
-            tau_j2[j]   = blas.nrm2(&T_sj2[j]) ** (-eta_j[j])
+            tau_j2[j]   = self.norm(T_sj2[j]) ** (-eta_j[j])
 
             tau_tsj2[j, 0] = tau_j2[j] * T_sj2[j, 0]
             tau_tsj2[j, 1] = tau_j2[j] * T_sj2[j, 1]
             tau_tsj2[j, 2] = tau_j2[j] * T_sj2[j, 2]
 
-            nL1[j] = blas.ddot(&N_sj[j], permeability[Ks_Sv[j, 0]])
-            nL2[j] = blas.ddot(&N_sj[j], permeability[Ks_Sv[j, 1]])
+            blas.dgemv("T", &m_dot, &n_dot, &alpha, &permeability[Ks_Sv[j, 0], 0, 0], &m_dot, &N_sj[j, 0], &incx, &beta, &nL1[j, 0], &incy)
+            blas.dgemv("T", &m_dot, &n_dot, &alpha, &permeability[Ks_Sv[j, 1], 0, 0], &m_dot, &N_sj[j, 0], &incx, &beta, &nL2[j, 0], &incy)
+            
             j += 1 
 
         cdef:
@@ -209,20 +217,17 @@ cdef class GLSInterpolation:
             idx3[i] = start + 2
             start += 3
 
-        cdef void set_mi(int row, int col, DTYPE_F_t[::1] v, int k = 1):
-            Mi[row, col]     = v[0] * k
-            Mi[row, col + 1] = v[1] * k
-            Mi[row, col + 2] = v[2] * k
+        
 
         for i in range(n_faces - n_bfaces):
-            set_mi(idx1[i], 3 * Ij1[i], nL1[i], -1)
-            set_mi(idx1[i], 3 * Ij2[i], nL2[i])
+            self._set_mi(idx1[i], 3 * Ij1[i], nL1[i], Mi,-1)
+            self._set_mi(idx1[i], 3 * Ij2[i], nL2[i], Mi, 1)
 
-            set_mi(idx2[i], 3 * Ij1[i], T_sj1[i], -1)
-            set_mi(idx2[i], 3 * Ij2[i], T_sj1[i])
+            self._set_mi(idx2[i], 3 * Ij1[i], T_sj1[i], Mi,-1)
+            self._set_mi(idx2[i], 3 * Ij2[i], T_sj1[i], Mi, 1)
 
-            set_mi(idx3[i], 3 * Ij1[i], tau_tsj2[i], -1)
-            set_mi(idx3[i], 3 * Ij2[i], tau_tsj2[i])
+            self._set_mi(idx3[i], 3 * Ij1[i], tau_tsj2[i], Mi,-1)
+            self._set_mi(idx3[i], 3 * Ij2[i], tau_tsj2[i], Mi, 1)
         
         if self.logging:
             temp_dict = {
@@ -255,8 +260,14 @@ cdef class GLSInterpolation:
             for k, v in temp_dict.items():
                 self.log_dict[point][k] = v
         
+    cdef void _set_mi(self, 
+                     const int row, const int col, 
+                     const DTYPE_F_t[::1] v, DTYPE_F_t[:, ::1] Mi, int k):
+            Mi[row, col]     = v[0] * k
+            Mi[row, col + 1] = v[1] * k
+            Mi[row, col + 2] = v[2] * k
 
-    cdef void cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b):
+    cdef DTYPE_F_t[::1] cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b):
         cdef:
             DTYPE_F_t[::1] c = self.array((3,), "d")
         
@@ -265,11 +276,14 @@ cdef class GLSInterpolation:
         c[2] = a[0] * b[1] - a[1] * b[0]
         
         return c
+    
+    cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a):
+        return sqrt(a[0] ** 2 + a[1] ** 2 + a[2] ** 2)
 
-    cdef void set_neumann_rows(self, const Grid grid,
+    cdef void set_neumann_rows(self, Grid grid,
                                int point, const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb,
-                               const DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
-                               DTYPE_I_t[:, ::1] Mi, DTYPE_I_t[:, ::1] Ni):
+                               DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
+                               DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni):
         cdef:
             int n_elems  = KSetv.shape[0]
             int n_faces  = Sv.shape[0]
@@ -282,10 +296,15 @@ cdef class GLSInterpolation:
             DTYPE_I_t[:, ::1] Ks_Svb = self.array((n_bfaces, NinpolSizes.NINPOL_MAX_ELEMENTS_PER_FACE), "i")
             DTYPE_F_t[:, ::1] nL = self.array((n_bfaces, 3), "d")
         
+        cdef:
+            int n_dot = 3, m_dot = 3
+            int incx = 1,  incy = 1
+            DTYPE_F_t alpha = 1.0, beta = 0.0
+
         for i in range(n_bfaces):
             neumann_rows[i] = start + i
-            Ks_Svb[j] = grid.esuf[grid.esuf_ptr[Svb[i]]]
-            nL[j] = blas.ddot(&grid.normal_faces[Svb[i]], permeability[Ks_Svb[j]])
+            Ks_Svb[i] = grid.esuf[grid.esuf_ptr[Svb[i]]]
+            blas.dgemv("T", &m_dot, &n_dot, &alpha, &permeability[Ks_Svb[i, 0], 0, 0], &m_dot, &grid.normal_faces[Svb[i], 0], &incx, &beta, &nL[i, 0], &incy)
             Ni[neumann_rows[i], n_elems] = neumann_val[Svb[i]]
         
         cdef:
@@ -305,26 +324,28 @@ cdef class GLSInterpolation:
         
     
     cdef void solve_ls(self, int point, int is_neumann,
-                       DTYPE_I_t[:, ::1] Mi, DTYPE_I_t[:, ::1] Ni, 
+                       DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni, 
                        DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
         cdef:
             int m = Mi.shape[0]
             int n = Mi.shape[1]
             int nrhs = Ni.shape[1]
-            const int lda = max(1, m)
-            const int ldb = max(1, m)
+            int lda = max(1, m)
+            int ldb = max(1, m)
 
-            DTYPE_I_t[::1] jptv = self.array((n,), "i")
-            float cond = 1e-12
-            DTYPE_I_t[::1] work = self.array((1,), "i")
+            int[::1] jptv = self.array((n,), "i")
+            double[::1] work = self.array((1,), "i")
             int lwork = -1
             int info = 0
+            double rcond = 1e-12
+            int rank = 0
+
         
-        lapack.dgelsy(&m, &n, &nrhs, &Mi, &lda, &Ni, &ldb, &jptv, &cond, &lwork, &info)
+        lapack.dgelsy(&m, &n, &nrhs, &Mi[0, 0], &lda, &Ni[0, 0], &ldb, &jptv[0], &rcond, &rank, &work[0], &lwork, &info)
         
-        lwork = work[0]
+        lwork = int(work[0])
         work = self.array((lwork,), "i")
-        lapack.dgelsy(&m, &n, &nrhs, &Mi, &lda, &Ni, &ldb, &jptv, &cond, &lwork, &info)
+        lapack.dgelsy(&m, &n, &nrhs, &Mi[0, 0], &lda, &Ni[0, 0], &ldb, &jptv[0], &rcond, &rank, &work[0], &lwork, &info)
 
         if info:
             self.logger.log(f"Failed to solve LS system. Info: {info}", "ERROR")

@@ -14,6 +14,7 @@ from .grid cimport Grid
 from .logger cimport Logger
 
 from .._methods.idw cimport inverse_distance
+from .._methods.regls cimport GLSInterpolation
 from .._methods.gls cimport GLS
 
 ctypedef cnp.int64_t DTYPE_I_t
@@ -28,6 +29,8 @@ cdef class Interpolator:
 
     cdef readonly object mesh_obj
     cdef readonly Grid grid_obj
+
+    cdef readonly GLSInterpolation regls
     
     cdef readonly dict variable_to_index
 

@@ -34,9 +34,10 @@ cdef class Interpolator:
 
         self.supported_methods = {
             "idw": inverse_distance,
-            "gls": GLS
+            "gls": GLS,
+            "regls": None
         }
-
+        self.regls = GLSInterpolation(logging)
         self.variable_to_index = {
             "points": {},
             "cells": {}
@@ -473,11 +474,11 @@ cdef class Interpolator:
             int point, elem, first, last, i, j, k
             int use_threads = min(8, np.ceil(n_target / 800))
 
-            DTYPE_I_t[::1] in_points, nm_points
+            DTYPE_I_t[::1] in_points, neumann_point
             DTYPE_F_t[:, :, ::1] permeability = np.zeros((self.grid_obj.n_elems, dim, dim), dtype=DTYPE_F)
-            DTYPE_F_t[::1] diff_mag   = np.zeros(self.grid_obj.n_elems, dtype=DTYPE_F)
-            DTYPE_F_t[::1] neumann    = np.zeros(self.grid_obj.n_points, dtype=DTYPE_F)
-            DTYPE_F_t[::1] neumann_ws = np.zeros(n_target, dtype=DTYPE_F)
+            DTYPE_F_t[::1] diff_mag    = np.zeros(self.grid_obj.n_elems, dtype=DTYPE_F)
+            DTYPE_F_t[::1] neumann_val = np.zeros(self.grid_obj.n_points, dtype=DTYPE_F)
+            DTYPE_F_t[::1] neumann_ws  = np.zeros(n_target, dtype=DTYPE_F)
 
         
         # Populate connectivity_idx
@@ -499,22 +500,62 @@ cdef class Interpolator:
             permeability_index = self.variable_to_index["cells"]["permeability"]
             diff_mag_index     = self.variable_to_index["cells"]["diff_mag"]
 
-            nm_points     = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
+            neumann_point  = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
             
-            permeability  = np.reshape(self.cells_data[permeability_index], 
-                                      (self.grid_obj.n_elems, dim, dim))
+            permeability   = np.reshape(self.cells_data[permeability_index], 
+                                       (self.grid_obj.n_elems, dim, dim))
 
             diff_mag      = self.cells_data[diff_mag_index]
-            neumann       = self.points_data[nm_index]
+            neumann_val   = self.points_data[nm_index]
 
             
             self.supported_methods[method](
                 self.grid_obj, 
-                in_points, nm_points,
+                in_points, neumann_point,
                 permeability, diff_mag,
-                neumann,
+                neumann_val,
                 weights, neumann_ws
             )
+
+        if method == "regls":
+            """
+            cdef void GLS(self, Grid grid, const DTYPE_I_t[::1] points, 
+            DTYPE_F_t[:, :, ::1] permeability, 
+            const DTYPE_F_t[::1] diff_mag, 
+            const DTYPE_I_t[::1] neumann_point, const DTYPE_F_t[::1] neumann_val,
+            DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
+            """
+
+            permeability_index = self.variable_to_index["cells"]["permeability"]
+            permeability  = np.reshape(self.cells_data[permeability_index], 
+                                      (self.grid_obj.n_elems, dim, dim))
+                                      
+            nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
+            nm_index      = self.variable_to_index["points"]["neumann" + "_" + variable]
+
+            
+            diff_mag_index     = self.variable_to_index["cells"]["diff_mag"]
+
+            permeability  = np.reshape(self.cells_data[permeability_index], 
+                                      (self.grid_obj.n_elems, dim, dim))
+
+            diff_mag      = self.cells_data[diff_mag_index]
+            
+            neumann_point = np.asarray(self.points_data[nm_flag_index]).astype(DTYPE_I) 
+            neumann_val   = self.points_data[nm_index]
+
+            self.regls.GLS(
+                self.grid_obj, 
+                target_points, 
+                permeability, 
+                diff_mag, 
+                neumann_point, 
+                neumann_val,
+                weights, 
+                neumann_ws
+            )
+
+
 
         if method == "idw":
             self.supported_methods[method](
