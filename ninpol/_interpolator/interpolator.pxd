@@ -7,7 +7,7 @@ cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
 from libc.stdio cimport printf
-from cython.parallel cimport parallel, prange
+from cython.parallel import prange
 cimport openmp
 
 from .grid cimport Grid
@@ -17,8 +17,8 @@ from .._methods.idw cimport inverse_distance
 from .._methods.regls cimport GLSInterpolation
 from .._methods.gls cimport GLS
 
-ctypedef cnp.int64_t DTYPE_I_t
-ctypedef cnp.float64_t DTYPE_F_t
+ctypedef long DTYPE_I_t
+ctypedef double DTYPE_F_t
 
 
 cdef class Interpolator:

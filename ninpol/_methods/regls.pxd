@@ -5,8 +5,8 @@ cimport scipy.linalg.cython_blas as blas
 
 cnp.import_array()                  # Needed to use NumPy C API
 
-ctypedef cnp.int64_t DTYPE_I_t
-ctypedef cnp.float64_t DTYPE_F_t
+ctypedef long DTYPE_I_t
+ctypedef double DTYPE_F_t
 from cython cimport view
 
 from .._interpolator.logger cimport Logger
@@ -32,11 +32,12 @@ cdef class GLSInterpolation:
     
     
     cdef void build_ks_sv_arrays(self, Grid grid, int point, 
-                                 DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb)
+                                 DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb, 
+                                 const int n_bface)
 
     cdef void build_ls_matrices(self, Grid grid, int point, 
-                                const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb,
-                                DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
+                                const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
+                                const int n_bface, DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
                                 DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni)
     
     cdef void _set_mi(self, 
@@ -44,8 +45,8 @@ cdef class GLSInterpolation:
                      const DTYPE_F_t[::1] v, DTYPE_F_t[:, ::1] Mi, int k)
 
     cdef void set_neumann_rows(self, Grid grid,
-                               int point, const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb,
-                               DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
+                               int point, const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
+                               const int n_bface, DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
                                DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni)
 
     cdef void solve_ls(self, int point, int is_neumann,

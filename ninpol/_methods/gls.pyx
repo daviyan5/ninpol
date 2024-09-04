@@ -170,34 +170,19 @@ cdef void interpolate_nodes(Grid grid,
 
         if logging:
             logger.log("Interpolating point: %d" % point, "INFO")
-            if nK + nS < 1000:
-                temp_dict = {
-                    "nK" : nK,
-                    "nS" : nS,
-                    "nb" : nb,
-                    "neumann" : is_neumann,
-                    "Mi" : np.asarray(Mi),
-                    "Ni" : np.asarray(Ni),
-                    "neu_rows" : np.asarray(neu_rows),
-                    "Ik" : np.asarray(Ik),
-                    "sorter" : np.asarray(sorter),
-                    "Ks_Svb" : np.asarray(Ks_Svb),
-                    "nL" : np.asarray(nL),
-                }
-            else:
-                temp_dict = {
-                    "nK" : nK,
-                    "nS" : nS,
-                    "nb" : nb,
-                    "neumann" : is_neumann,
-                    "Mi" : {"shape": np.shape(Mi)},
-                    "Ni" : {"shape": np.shape(Ni)},
-                    "neu_rows" : {"shape": np.shape(neu_rows)},
-                    "Ik" : {"shape": np.shape(Ik)},
-                    "sorter" : {"shape": np.shape(sorter)},
-                    "Ks_Svb" : {"shape": np.shape(Ks_Svb)},
-                    "nL" : {"shape": np.shape(nL)}
-                }
+            temp_dict = {
+                "nK" : nK,
+                "nS" : nS,
+                "nb" : nb,
+                "neumann" : is_neumann,
+                "Mi" : np.asarray(Mi),
+                "Ni" : np.asarray(Ni),
+                "neu_rows" : np.asarray(neu_rows),
+                "Ik" : np.asarray(Ik),
+                "sorter" : np.asarray(sorter),
+                "Ks_Svb" : np.asarray(Ks_Svb),
+                "nL" : np.asarray(nL),
+            }
             for key in temp_dict:
                 log_dict[point][key] = temp_dict[key]
             logger.json(str(point), log_dict[point])
@@ -307,79 +292,44 @@ cdef void set_ls_matrices(Grid grid, Logger logger,
     idx2 = idx2[:nKsv]
     idx3 = idx3[:nKsv]
 
-    if logging:
-        if nK + nS < 1000:
-            temp_dict = {
-                "v" : v,
+    if True:
+        
+        temp_dict = {
+            "v" : v,
 
-                "nK" : nK,
-                "nS" : nS,
+            "nK" : nK,
+            "nS" : nS,
 
-                "KSetv" : np.asarray(KSetv),
-                "Sv" : np.asarray(Sv),
+            "KSetv" : np.asarray(KSetv),
+            "Sv" : np.asarray(Sv),
 
-                "xv" : np.asarray(xv),
-                "xK" : np.asarray(xK),
-                "dKv": np.asarray(dKv),
+            "xv" : np.asarray(xv),
+            "xK" : np.asarray(xK),
+            "dKv": np.asarray(dKv),
 
-                "KSetv_range": np.asarray(KSetv),
-                "xS" : np.asarray(xS),
-                "N_sj": np.asarray(N_sj),
+            "KSetv_range": np.asarray(KSetv),
+            "xS" : np.asarray(xS),
+            "N_sj": np.asarray(N_sj),
 
-                "eta_j": np.asarray(eta_j),
-                "Ks_Sv": np.asarray(Ks_Sv),
+            "eta_j": np.asarray(eta_j),
+            "Ks_Sv": np.asarray(Ks_Sv),
 
-                "Ij1": np.asarray(Ij1),
-                "Ij2": np.asarray(Ij2),
+            "Ij1": np.asarray(Ij1),
+            "Ij2": np.asarray(Ij2),
 
-                "T_sj1": np.asarray(T_sj1),
-                "T_sj2": np.asarray(T_sj2),
+            "T_sj1": np.asarray(T_sj1),
+            "T_sj2": np.asarray(T_sj2),
 
-                "tau_j2": np.asarray(tau_j2),
-                "tau_tsj2": np.asarray(tau_tsj2),
+            "tau_j2": np.asarray(tau_j2),
+            "tau_tsj2": np.asarray(tau_tsj2),
 
-                "nL1": np.asarray(nL1),
-                "nL2": np.asarray(nL2),
+            "nL1": np.asarray(nL1),
+            "nL2": np.asarray(nL2),
 
-                "idx1": np.asarray(idx1),
-                "idx2": np.asarray(idx2),
-                "idx3": np.asarray(idx3)
-            }
-        else:
-            temp_dict = {
-                "v" : v,
-                "nK" : nK,
-                "nS" : nS,
-
-                "KSetv" : {"shape": np.shape(KSetv)},
-                "Sv" : {"shape": np.shape(Sv)},
-                "xv" : {"shape": np.shape(xv)},
-                "xK" : {"shape": np.shape(xK)},
-                "dKv": {"shape": np.shape(dKv)},
-                "KSetv_range": {"shape": np.shape(KSetv)},
-                "xS" : {"shape": np.shape(xS)},
-                "N_sj": {"shape": np.shape(N_sj)},
-                "eta_j": {"shape": np.shape(eta_j)},
-                "Ks_Sv": {"shape": np.shape(Ks_Sv)},
-
-                "Ij1": {"shape": np.shape(Ij1)},
-                "Ij2": {"shape": np.shape(Ij2)},
-
-                "T_sj1": {"shape": np.shape(T_sj1)},
-                "T_sj2": {"shape": np.shape(T_sj2)},
-
-                "tau_j2": {"shape": np.shape(tau_j2)},
-                "tau_tsj2": {"shape": np.shape(tau_tsj2)},
-
-                "nL1": {"shape": np.shape(nL1)},
-                "nL2": {"shape": np.shape(nL2)},
-
-                "idx1": {"shape": np.shape(idx1)},
-                "idx2": {"shape": np.shape(idx2)},
-                "idx3": {"shape": np.shape(idx3)}
-
-            }
-
+            "idx1": np.asarray(idx1),
+            "idx2": np.asarray(idx2),
+            "idx3": np.asarray(idx3)
+        }
         # append the keys from temp_dict to log_dict[v]
         for key in temp_dict:
             log_dict[v][key] = temp_dict[key]

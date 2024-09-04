@@ -8,8 +8,8 @@ cnp.import_array()                  # Needed to use NumPy C API
 
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 
-ctypedef cnp.int64_t    DTYPE_I_t
-ctypedef cnp.float64_t  DTYPE_F_t
+ctypedef long    DTYPE_I_t
+ctypedef double  DTYPE_F_t
 
 
 
