@@ -271,7 +271,7 @@ cdef class Grid:
         self.fsup_ptr = np.zeros(self.n_points+1, dtype=DTYPE_I)
 
         for i in range(self.n_faces):
-            for j in range(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE):
+            for j in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE)):
                 if self.inpofa[i, j] == -1:
                     break
                 point = self.inpofa[i, j]
@@ -284,7 +284,7 @@ cdef class Grid:
 
         self.fsup = np.zeros(self.fsup_ptr[self.n_points], dtype=DTYPE_I)
         for i in range(self.n_faces):
-            for j in range(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE):
+            for j in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE)):
                 if self.inpofa[i, j] == -1:
                     break
                 point = self.inpofa[i, j]
@@ -489,11 +489,11 @@ cdef class Grid:
                 elem_edge_index = self.lpoed[elem_type, j]
 
                 # Assume there's the exacly same amount of points in each edge (usually 2)
-                for k in range(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE):
+                for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
                     elem_edge[k] = self.inpoel[i, elem_edge_index[k]]
 
                 sorted_elem_edge = np.sort(elem_edge)
-                for k in range(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE):
+                for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
                     elem_edge_str += str(sorted_elem_edge[k]) + ","
                 
                 if edges_dict.get(elem_edge_str) is None:
@@ -501,7 +501,7 @@ cdef class Grid:
                     current_edge_index += 1
                     edges_dict[elem_edge_str] = edge_index
 
-                    for k in range(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE):
+                    for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
                         self.inpoed[edge_index, k] = elem_edge[k]
 
                 else:
@@ -634,7 +634,7 @@ cdef class Grid:
         omp_set_num_threads(use_threads)
         for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
             npofa = 0
-            for j in range(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE):
+            for j in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE)):
                 if self.inpofa[i, j] == -1:
                     break
                 npofa = npofa + 1

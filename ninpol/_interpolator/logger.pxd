@@ -5,4 +5,6 @@ cdef class Logger:
 
     cdef readonly dict data
     cdef int last_index
-    
+    cdef int terminal
+
+    cdef void log(self, str message, str type)

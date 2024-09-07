@@ -8,11 +8,11 @@ cdef class IDWInterpolation:
 
     def __cinit__(self, int logging=False):
         self.logging = logging
-        self.logger = Logger(logging)
+        self.logger  = Logger("IDW", True)
         self.log_dict = {}
 
     cdef void prepare(self, Grid grid, 
-                      const DTYPE_F_t[:, ::1] cell_data, const DTYPE_F_t[:, ::1] point_data,
+                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data,
                       dict variable_to_index,
                       str variable,
                       const DTYPE_I_t[::1] target_points,
@@ -22,9 +22,12 @@ cdef class IDWInterpolation:
             int n_target = target_points.shape[0]
 
             DTYPE_F_t[:, ::1] target_coordinates = np.asarray(grid.point_coords)[target_points]
-            DTYPE_F_t[:, ::1] source_coordinates = np.asarray(grid.cell_coords)
+            DTYPE_F_t[:, ::1] source_coordinates = np.asarray(grid.centroids)
 
-        self.inverse_distance(grid, dim, target_points, target_coordinates, source_coordinates, weights)
+            int neumann_flag_index = variable_to_index["points"]["neumann_flag" + "_" + variable]
+            const DTYPE_I_t[::1] neumann_point   = np.asarray(points_data[neumann_flag_index]).astype(int)
+
+        self.inverse_distance(dim, grid, target_points, target_coordinates, source_coordinates, neumann_point, weights)
         
             
             
@@ -33,6 +36,7 @@ cdef class IDWInterpolation:
                                const DTYPE_I_t[::1] target_points,
                                const DTYPE_F_t[:, ::1] target_coordinates, 
                                const DTYPE_F_t[:, ::1] source_coordinates,
+                               const DTYPE_I_t[::1] neumann_point,
                                DTYPE_F_t[:, ::1] weights):
         
         cdef int n_target = target_coordinates.shape[0]
@@ -55,6 +59,8 @@ cdef class IDWInterpolation:
             zero_found = False
             total_distance = 0
             n_source = 0
+            if grid.boundary_points[point] and not neumann_point[point]:
+                continue
             for j, source_idx in enumerate(grid.esup[grid.esup_ptr[point]:grid.esup_ptr[point + 1]]):
                 distance = 0.0
                 for k in range(dim):

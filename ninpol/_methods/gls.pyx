@@ -1,13 +1,13 @@
 import numpy as np
 import scipy as sp
-import time
-import re
 
 from cython.parallel import prange
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from libcpp.unordered_map cimport unordered_map
 from libc.stdio cimport printf
 from libc.math cimport sqrt
+
+from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 
 from cython cimport view
 
@@ -18,10 +18,11 @@ cdef class GLSInterpolation:
     def __cinit__(self, int logging=False):
         self.logging  = logging
         self.log_dict = {}
-        self.logger   = Logger("GLS")
+        self.logger   = Logger("GLS", True)
+        self.only_dgels = 0.0
 
     cdef void prepare(self, Grid grid, 
-                      const DTYPE_F_t[:, ::1] cell_data, const DTYPE_F_t[:, ::1] point_data,
+                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data,
                       dict variable_to_index,
                       str variable,
                       const DTYPE_I_t[::1] target_points,
@@ -32,16 +33,16 @@ cdef class GLSInterpolation:
             int permeability_index = variable_to_index["cells"]["permeability"]
             int diff_mag_index     = variable_to_index["cells"]["diff_mag"]
             int neumann_flag_index = variable_to_index["points"]["neumann_flag" + "_" + variable]
-            int neumann_val_index  = variable_to_index["points"]["neumann_val" + "_" + variable]
+            int neumann_val_index  = variable_to_index["points"]["neumann" + "_" + variable]
 
-            DTYPE_F_t[:, :, ::1] permeability   = np.reshape(self.cells_data[permeability_index], 
+            DTYPE_F_t[:, :, ::1] permeability   = np.reshape(cells_data[permeability_index], 
                                                             (grid.n_elems, dim, dim))
             
-            DTYPE_F_t[::1] diff_mag             = self.cells_data[diff_mag_index]
+            const DTYPE_F_t[::1] diff_mag             = cells_data[diff_mag_index]
 
-            DTYPE_I_t[::1] neumann_point        = self.points_data[neumann_flag_index]
+            const DTYPE_I_t[::1] neumann_point        = np.asarray(points_data[neumann_flag_index]).astype(DTYPE_I)
 
-            DTYPE_F_t[::1] neumann_val          = self.points_data[neumann_val_index]
+            const DTYPE_F_t[::1] neumann_val          = points_data[neumann_val_index]
         
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
         
@@ -69,10 +70,18 @@ cdef class GLSInterpolation:
             int n_face
             int face
             int n_bface
+        
+        cdef:
+            double start_time = 0., end_time = 0.
+            double build_time = 0., solve_time = 0.
 
-            dict temp_dict
+            timespec ts
+
 
         for point in points:
+            clock_gettime(CLOCK_REALTIME, &ts)
+            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
             n_elem  = grid.esup_ptr[point + 1] - grid.esup_ptr[point]
             n_face  = grid.fsup_ptr[point + 1] - grid.fsup_ptr[point]
             n_bface = 0
@@ -97,11 +106,25 @@ cdef class GLSInterpolation:
                     Ni[i, j] = 0.0
 
             self.build_ks_sv_arrays(grid, point, KSetv, Sv, Svb, n_bface)
-
             self.build_ls_matrices(grid, point, KSetv, Sv, Svb, n_bface, permeability, diff_mag, Mi, Ni)
             if neumann_point[point]:
                 self.set_neumann_rows(grid, point, KSetv, Sv, Svb, n_bface, permeability, neumann_val, Mi, Ni)
+
+            clock_gettime(CLOCK_REALTIME, &ts)
+            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+            build_time += end_time - start_time
+
+            clock_gettime(CLOCK_REALTIME, &ts)
+            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
             self.solve_ls(point, neumann_point[point], Mi, Ni, weights, neumann_ws)
+
+            clock_gettime(CLOCK_REALTIME, &ts)
+            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+            solve_time += end_time - start_time
+        
+        if self.logging:
+            self.logger.log(f"GLS: build {build_time:.2f} s, Solve {solve_time:.2f} s, DGELS {self.only_dgels:.2f}", "INFO")
 
     cdef view.array array(self, tuple shape, str t):
         if t == 'i':
@@ -221,7 +244,6 @@ cdef class GLSInterpolation:
 
         cdef:
             unordered_map[DTYPE_I_t, DTYPE_I_t] KSetv_map
-            dict temp_dict = {}
         
         for i in range(n_elem):
             KSetv_map[KSetv[i]] = i
@@ -335,27 +357,36 @@ cdef class GLSInterpolation:
             DTYPE_F_t[::1, :] A = Mi.copy_fortran()
             DTYPE_F_t[::1, :] B = Ni.copy_fortran()
 
-            int[::1] jptv = self.array((n,), "i")
             double[::1] work = self.array((1,), "d")
+            
             int lwork = -1
             int info = 0
-            double rcond = 1e-12
-            int rank = 0
 
-        for i in range(n):
-            jptv[i] = 0
+        
+        
+        cdef:
+            double start_time = 0., end_time = 0.
+            timespec ts
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
-        lapack.dgelsy(&m, &n, &nrhs, &A[0, 0], &lda, &B[0, 0], &ldb, &jptv[0], &rcond, &rank, &work[0], &lwork, &info)
+        lapack.dgels('N', &m, &n, &nrhs, &A[0, 0], &lda, &B[0, 0], &ldb, &work[0], &lwork, &info)
         
         lwork = int(work[0])
         work = self.array((max(1, lwork),), "d")
         
-        lapack.dgelsy(&m, &n, &nrhs, &A[0, 0], &lda, &B[0, 0], &ldb, &jptv[0], &rcond, &rank, &work[0], &lwork, &info)
-        
-        if info:
-            self.logger.log(f"Failed to solve LS system. Info: {info}", "ERROR")
-            raise ValueError("Failed to solve LS system")
+        lapack.dgels('N', &m, &n, &nrhs, &A[0, 0], &lda, &B[0, 0], &ldb, &work[0], &lwork, &info)
+    
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
+        if info:
+            if self.logging:
+                self.logger.log(f"Failed to solve LS system. Info: {info}", "ERROR")
+            raise ValueError("Failed to solve LS system")
+        
+        self.only_dgels += end_time - start_time
         cdef:
             int M_size  = n
             int w_total = nrhs - is_neumann

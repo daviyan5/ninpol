@@ -11,15 +11,17 @@ from _ctypes import PyObj_FromPtr
 from ..utils import common
 
 cdef class Logger:
-    def __cinit__(self, str log_name, str directory=""):
+    def __cinit__(self, str log_name, int terminal = True, str directory=""):
         self.last_index = 0
         cdef str suffix = "-" + datetime.now().strftime('%y%m%d')
 
         self.filename = log_name + suffix + "_" + str(self.last_index) + ".log"
         self.json_filename = log_name + suffix + "_" + str(self.last_index) + ".json"
+
+        self.terminal = terminal
         self.directory = directory
 
-        if self.directory == "":
+        if self.directory == "" and not terminal:
             # Create .ninpollog directory at the terminal's current directory
             self.directory = os.getcwd()
             self.directory = os.path.join(self.directory, ".ninpollog")
@@ -28,21 +30,27 @@ cdef class Logger:
         self.json_filename = os.path.join(self.directory, self.json_filename)
 
         self.data = {}
-        if not os.path.exists(self.directory):
-            os.makedirs(self.directory)
-        else:
-            # If there's a log file with the same name, set the last_index to the next number
-            while os.path.exists(self.filename) or os.path.exists(self.json_filename):
-                self.last_index += 1
-                self.filename = log_name + suffix + "_" + str(self.last_index) + ".log"
-                self.json_filename = log_name + suffix + "_" + str(self.last_index) + ".json"
-                self.filename = os.path.join(self.directory, self.filename)
-                self.json_filename = os.path.join(self.directory, self.json_filename)
+        if not terminal:
+            if not os.path.exists(self.directory):
+                os.makedirs(self.directory)
+            else:
+                # If there's a log file with the same name, set the last_index to the next number
+                while os.path.exists(self.filename) or os.path.exists(self.json_filename):
+                    self.last_index += 1
+                    self.filename = log_name + suffix + "_" + str(self.last_index) + ".log"
+                    self.json_filename = log_name + suffix + "_" + str(self.last_index) + ".json"
+                    self.filename = os.path.join(self.directory, self.filename)
+                    self.json_filename = os.path.join(self.directory, self.json_filename)
     
 
-    def log(self, str message, str type):
-        with open(self.filename, 'a') as f:
-            f.write(f"[{type:<5}] ({datetime.now().strftime('%H:%M:%S'):<8}) {message}\n")
+    cdef void log(self, str message, str type):
+        cdef:
+            str full_str = f"[{type:<5}] ({datetime.now().strftime('%H:%M:%S'):<8}) {message}"
+        if self.terminal:
+            print(full_str)
+        else:
+            with open(self.filename, 'a') as f:
+                f.write(full_str)
 
     def np_to_list(self, data):
         # Convert all keys to string
@@ -55,6 +63,8 @@ cdef class Logger:
         return sdata
 
     def json(self, str member_name, dict data):
+        if self.terminal:
+            self.log("Logging to JSON is not supported in terminal mode", "WARN")
         data = self.np_to_list(data)
         new_data = {"timestamp": datetime.now().strftime('%H:%M:%S'), "data": data}
         self.data[member_name] = new_data

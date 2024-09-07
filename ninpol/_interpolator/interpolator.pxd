@@ -30,6 +30,7 @@ cdef class Interpolator:
     cdef readonly Grid grid
 
     cdef readonly GLSInterpolation gls
+    cdef readonly IDWInterpolation idw
     
     cdef readonly dict variable_to_index
 
@@ -43,6 +44,13 @@ cdef class Interpolator:
     cdef readonly Logger logger
 
     cdef readonly int is_grid_initialized
+
+    cdef tuple process_mesh(self, object mesh)
+
+    cdef void load_cell_data(self)
+    cdef void load_point_data(self)
+
+    cdef void load_data(self, dict data_dict, str data_type)
 
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability)
 
