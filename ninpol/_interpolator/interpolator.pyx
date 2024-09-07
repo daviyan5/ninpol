@@ -69,12 +69,14 @@ cdef class Interpolator:
             raise ValueError("Filename for the mesh or meshio.Mesh object must be provided.")
         # Loads a mesh from a file
         
-        if self.logging:
-            self.logger.log(f"Loading mesh from {filename}", "INFO")
 
         if filename != "":
+            if self.logging:
+                self.logger.log(f"Reading mesh from {filename}", "INFO")
             self.mesh_obj = meshio.read(filename)
         else:
+            if self.logging:
+                self.logger.log(f"Using mesh object", "INFO")
             self.mesh_obj = mesh_obj
 
         cdef tuple args = self.process_mesh(self.mesh_obj)
@@ -85,7 +87,13 @@ cdef class Interpolator:
         self.grid.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
         self.grid.calculate_centroids()
         self.grid.calculate_normal_faces()
-       
+
+        cdef:
+            double start_time = 0., end_time = 0.
+            timespec ts
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
         if self.mesh_obj.cell_data:
             self.load_cell_data()
         else:
@@ -97,18 +105,17 @@ cdef class Interpolator:
         else:
             self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
             self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
+        if self.logging:
+            self.logger.log(f"Data loaded in {end_time - start_time:.2f} seconds", "INFO")
 
         self.is_grid_initialized = True
 
         if self.logging:
             self.logger.log(f"Mesh loaded successfully: {self.grid.n_points} points and {self.grid.n_elems} elements.", "INFO")
-            if self.grid.n_points < 10000:
-                self.logger.json("grid", self.grid.get_data())
-
-                self.logger.json("interpolator", self.get_dict())
-                self.logger.log("Grid loaded successfully", "INFO")
-            else:
-                self.logger.log("Grid too large to be logged", "WARN")
+            
         
     cdef tuple process_mesh(self, object mesh):
         cdef:
@@ -219,7 +226,8 @@ cdef class Interpolator:
                 npoel,
                 nfael, lnofa, lpofa, 
                 nedel, lpoed,
-                connectivity, element_types)
+                connectivity, element_types,
+                self.logging)
 
     
     cdef void load_data(self, dict data_dict, str data_type):

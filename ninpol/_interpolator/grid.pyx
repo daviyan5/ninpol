@@ -9,9 +9,13 @@ import numpy as np
 from cython.parallel import prange
 from libc.math cimport sqrt
 from libc.stdio cimport printf
+from cython cimport typeof
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
+
+
+from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 
 cdef class Grid:
     def __cinit__(self, DTYPE_I_t dim, 
@@ -19,7 +23,8 @@ cdef class Grid:
                         DTYPE_I_t[::1] npoel,
                         DTYPE_I_t[::1] nfael, DTYPE_I_t[:, ::1] lnofa, DTYPE_I_t[:, :, ::1] lpofa, 
                         DTYPE_I_t[::1] nedel, DTYPE_I_t[:, :, ::1] lpoed,
-                        DTYPE_I_t[:, ::1] connectivity, DTYPE_I_t[::1] element_types):
+                        DTYPE_I_t[:, ::1] connectivity, DTYPE_I_t[::1] element_types,
+                        int logging = False):
 
         if dim < 1:
             raise ValueError("The number of dimensions must be greater than 0.")
@@ -40,6 +45,9 @@ cdef class Grid:
         self.MX_POINTS_PER_POINT = 0
         self.MX_ELEMENTS_PER_FACE = 0
         self.MX_FACES_PER_POINT = 0
+        
+        self.logging = logging
+        self.logger  = Logger("Grid", True)
 
         def _validate_shape(array, expected_shape):
             if array.shape != expected_shape:
@@ -102,28 +110,42 @@ cdef class Grid:
 
         self.normal_faces = np.zeros((0, 0),  dtype=DTYPE_F)
 
+    cdef void measure_time(self, object call, str call_name):
+        cdef:
+            double start_time = 0.0, end_time = 0.0
+            timespec ts
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        call()
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name}: {end_time - start_time:.3f} s", "INFO")
+
     cpdef void build(self):
         
+        
         # Calculate the elements surrounding each point
-        self.build_esup()
-
+        self.measure_time(self.build_esup, "build esup")
+        
         # Calculate the points surrounding each point
-        self.build_psup()
+        self.measure_time(self.build_psup, "build psup")
 
         # Calculate the faces composing each element
-        self.build_infael()
+        self.measure_time(self.build_infael, "build infael")
         
         # Calculate the faces surrounding each point
-        self.build_fsup()
+        self.measure_time(self.build_fsup, "build fsup")
 
         # Calculate the elements surrounding each face
-        self.build_esuf()
+        self.measure_time(self.build_esuf, "build esuf")
         
         # Calculate the elements surrounding each element
-        self.build_esuel()
+        self.measure_time(self.build_esuel, "build esuel")
 
         # Calculate the edges surrounding each element
-        self.build_inedel()
+        self.measure_time(self.build_inedel, "build inedel")
 
         self.are_structures_built = True
     
@@ -371,11 +393,6 @@ cdef class Grid:
             int ielem, jelem
             int ielem_type, jelem_type
             int unused_spaces
-            DTYPE_I_t[::1] ielem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] jelem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-
-            DTYPE_I_t[::1] ielem_face_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] jelem_face_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
             int point, kpoint
             int num_elems, num_elems_min
@@ -383,35 +400,27 @@ cdef class Grid:
             int jelem_face_point
             int is_equal 
 
+            int use_threads = min(8, np.ceil(self.n_elems / 800))
+
             
         self.esuel = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
 
         # For each element
-        for ielem in range(self.n_elems):
+        omp_set_num_threads(use_threads)
+        for ielem in prange(self.n_elems, nogil=True, schedule='static', num_threads=use_threads):
             ielem_type = self.element_types[ielem]
-
             # For each face
             for j in range(self.nfael[ielem_type]):
 
                 if self.esuel[ielem, j] != -1:
                     continue
-                # Choose a point from the face
-                ielem_face_index = self.lpofa[ielem_type, j]
                 
-                for k in range(self.lnofa[ielem_type, j]):
-                    ielem_face[k] = self.inpoel[ielem, ielem_face_index[k]]
-                
-                unused_spaces = NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - self.lnofa[ielem_type, j]
-
-                for k in range(unused_spaces):
-                    ielem_face[NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - k - 1] = -1
-
-                point = ielem_face[0]
+                point = self.inpoel[ielem, self.lpofa[ielem_type, j, 0]]
                 num_elems_min = self.esup_ptr[point+1] - self.esup_ptr[point]
 
                 # Choose the point with the least number of elements around it
                 for k in range(self.lnofa[ielem_type, j]):
-                    kpoint = ielem_face[k]
+                    kpoint = self.inpoel[ielem, self.lpofa[ielem_type, j, k]]
                     num_elems = self.esup_ptr[kpoint+1] - self.esup_ptr[kpoint]
                     if num_elems < num_elems_min:
                         point = kpoint
@@ -419,7 +428,7 @@ cdef class Grid:
 
 
                 found_elem = False
-
+                
                 # For each element around the point
                 for k in range(self.esup_ptr[point], self.esup_ptr[point+1]):
                     jelem = self.esup[k]
@@ -430,14 +439,13 @@ cdef class Grid:
 
                         # For each face of the element around the point
                         for l in range(self.nfael[jelem_type]):
-                            jelem_face_index = self.lpofa[jelem_type, l]
                             is_equal = 0
                             for m in range(self.lnofa[jelem_type, l]):
-                                jelem_face_point = self.inpoel[jelem, jelem_face_index[m]]
+                                jelem_face_point = self.inpoel[jelem, self.lpofa[jelem_type, l, m]]
 
                                 for m in range(self.lnofa[ielem_type, j]):
-                                    if jelem_face_point == ielem_face[m]:
-                                        is_equal += 1
+                                    if jelem_face_point == self.inpoel[ielem, self.lpofa[ielem_type, j, m]]:
+                                        is_equal = is_equal + 1
                                         break
                         
                             if is_equal == self.lnofa[ielem_type, j]:

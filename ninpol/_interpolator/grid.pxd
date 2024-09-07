@@ -3,6 +3,7 @@ This file contains the "Grid" class definition, for mesh manipulation.
 """
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
 from .ninpol_defines cimport *
+from .logger cimport Logger
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
@@ -20,6 +21,14 @@ cdef class Grid:
 
     Attributes
     ----------
+
+    logging : int
+        Flag to enable logging
+    logger: Logger
+        Logger object for logging purposes
+    
+
+
     n_dims : int
         Number of dimensions
     n_elems : int
@@ -109,6 +118,10 @@ cdef class Grid:
         i.e : The edges that compose element i are in edsuel[i, :])
 
     """
+
+    cdef int logging
+    cdef Logger logger
+
     cdef readonly int dim
 
     cdef readonly int n_elems
@@ -169,6 +182,10 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[:, ::1] inpoed
     cdef readonly DTYPE_I_t[:, ::1] inedel
     
+    """
+        Measures the time taken by a function call.
+    """
+    cdef void measure_time(self, object call, str call_name)
 
     """
         Builds the necessary grid data structures for the given connectivity matrix, that being:
