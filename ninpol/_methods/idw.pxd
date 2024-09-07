@@ -6,9 +6,25 @@ cnp.import_array()                  # Needed to use NumPy C API
 ctypedef long DTYPE_I_t
 ctypedef double DTYPE_F_t
 
+from .._interpolator.logger cimport Logger
+from .._interpolator.grid cimport Grid
+from .._interpolator.ninpol_defines cimport *
 
-cdef void inverse_distance(const int dim,
-                           const DTYPE_F_t[:, ::1] target_coordinates, 
-                           const DTYPE_F_t[:, ::1] source_coordinates,
-                           const DTYPE_I_t[:, ::1] connectivity_idx,
-                           DTYPE_F_t[:, ::1] weights)
+cdef class IDWInterpolation:
+
+    cdef readonly int logging
+    cdef readonly Logger logger
+    cdef dict log_dict
+
+    cdef void prepare(self, Grid grid, 
+                      const DTYPE_F_t[:, ::1] cell_data, const DTYPE_F_t[:, ::1] point_data,
+                      dict variable_to_index,
+                      str variable,
+                      const DTYPE_I_t[::1] target_points,
+                      DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
+
+    cdef void inverse_distance(self, const int dim, Grid grid,
+                               const DTYPE_I_t[::1] target_points,
+                               const DTYPE_F_t[:, ::1] target_coordinates, 
+                               const DTYPE_F_t[:, ::1] source_coordinates,
+                               DTYPE_F_t[:, ::1] weights)

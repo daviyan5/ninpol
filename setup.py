@@ -41,12 +41,6 @@ ext_data = [
             name = f'{project_name}._methods.gls',
             sources = [
                 os.path.join(directory_path, project_name, '_methods', 'gls.pyx')
-            ]
-        ),
-        Extension(
-            name = f'{project_name}._methods.regls',
-            sources = [
-                os.path.join(directory_path, project_name, '_methods', 'regls.pyx')
             ],
             language='c++'
         ),

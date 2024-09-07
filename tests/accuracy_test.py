@@ -32,8 +32,8 @@ def l2norm_array(measure, reference):
     sqr_sum = np.sum(reference ** 2)
     return np.sqrt(((measure - reference) ** 2) / sqr_sum) 
 
-FUNCTIONS = [analytical.linear, analytical.quadratic, analytical.quarter_five_spot, analytical.u]
-NAMES     = ["linear", "quadratic", "quarter_five_spot", "u"]
+FUNCTIONS = [analytical.case1, analytical.case2, analytical.case3, analytical.case4]
+NAMES     = ["case1", "case2", "case3", "case4"]
 
 class TestAccuracy:
     

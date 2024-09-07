@@ -32,12 +32,16 @@ cdef class Interpolator:
 
         self.is_grid_initialized = False
 
+
+        self.gls = GLSInterpolation(logging)
+
+        self.idw = IDWInterpolation(logging)
+
         self.supported_methods = {
-            "idw": inverse_distance,
-            "gls": GLS,
-            "regls": None
+            "gls": self.gls.prepare,
+            "idw": self.idw.prepare
         }
-        self.regls = GLSInterpolation(logging)
+
         self.variable_to_index = {
             "points": {},
             "cells": {}
@@ -70,12 +74,12 @@ cdef class Interpolator:
 
         cdef tuple args = self.process_mesh(self.mesh_obj)
 
-        self.grid_obj = Grid(*args)
+        self.grid = Grid(*args)
 
-        self.grid_obj.build()
-        self.grid_obj.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
-        self.grid_obj.calculate_centroids()
-        self.grid_obj.calculate_normal_faces()
+        self.grid.build()
+        self.grid.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
+        self.grid.calculate_centroids()
+        self.grid.calculate_normal_faces()
        
         if self.mesh_obj.cell_data:
             self.load_cell_data()
@@ -92,9 +96,9 @@ cdef class Interpolator:
         self.is_grid_initialized = True
 
         if self.logging:
-            self.logger.log(f"Mesh loaded successfully: {self.grid_obj.n_points} points", "INFO")
-            if self.grid_obj.n_points < 10000:
-                self.logger.json("grid", self.grid_obj.get_data())
+            self.logger.log(f"Mesh loaded successfully: {self.grid.n_points} points", "INFO")
+            if self.grid.n_points < 10000:
+                self.logger.json("grid", self.grid.get_data())
 
                 self.logger.json("interpolator", self.get_dict())
                 self.logger.log("Grid loaded successfully", "INFO")
@@ -223,7 +227,7 @@ cdef class Interpolator:
 
         cdef:
             int n_variables = len(data_dict)
-            int n_elements = self.grid_obj.n_elems if data_type == "cells" else self.grid_obj.n_points
+            int n_elements = self.grid.n_elems if data_type == "cells" else self.grid.n_points
             int max_shape = 1, cur_shape
 
             int i, j
@@ -275,7 +279,7 @@ cdef class Interpolator:
         # cell_data_dict will save each variable separately for element type. We dont want that.
         
         cdef:
-            int dim = self.grid_obj.dim
+            int dim = self.grid.dim
             dict cell_data_dict = self.mesh_obj.cell_data_dict
             dict cell_data = {}
             str variable
@@ -347,7 +351,7 @@ cdef class Interpolator:
             data_index = self.variable_to_index["points"][variable]
             return np.asarray(self.points_data[data_index])[index]
 
-    def interpolate(self, str variable,  str method, int return_value = False, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
+    def interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
         
         if not self.is_grid_initialized:
             raise ValueError("Grid not initialized. Please load a mesh first.")
@@ -356,214 +360,92 @@ cdef class Interpolator:
             raise ValueError(f"Method '{method}' not supported. Supported methods are: {list(self.supported_methods.keys())}")
 
         if len(target_points) == 0:
-            target_points = np.arange(self.grid_obj.n_points, dtype=DTYPE_I)
+            target_points = np.arange(self.grid.n_points, dtype=DTYPE_I)
 
         cdef:
             int data_index = 0
             int data_dimension = 1
-            DTYPE_F_t[::1] source_data = np.zeros(1, dtype=DTYPE_F)
-            str source_type = "cells"
 
-       
         if variable not in self.variable_to_index["cells"]:
-            raise ValueError(f"Variable '{variable}' not found in cells data.")
+            raise ValueError(f"Variable '{variable}' not found in cells data. Point -> Cell interpolation not supported yet.")
 
         data_index     = self.variable_to_index["cells"][variable]
-        source_data    = self.cells_data[data_index]
         data_dimension = self.cells_data_dimensions[data_index]
         
+        if data_dimension > 1:
+            raise ValueError(f"Variable '{variable}' has more than one dimension. Vector data not supported yet.")
+
         cdef: 
             DTYPE_F_t[:, ::1] weights 
-            DTYPE_I_t[:, ::1] connectivity_idx
             DTYPE_F_t[::1] neumann_ws
 
         if self.logging:
             self.logger.log(f"Interpolating variable '{variable}' using method '{method}'", "INFO")
 
-        # The value of the interpolation is the product of the lines of the 
-        # weight matrix with the lines of the connectivity matrix, and the sum of the results for each line
-        weights, connectivity_idx, neumann_ws = self.prepare_interpolator(method, variable, data_dimension, target_points)
+        weights, neumann_ws = self.prepare_interpolator(method, variable, target_points)
         
         cdef:
-            int i, j, k
-            DTYPE_F_t[:, ::1] result = np.zeros((len(target_points), data_dimension), dtype=DTYPE_F)
-            int n_target = len(target_points)
-            int n_elems = self.grid_obj.n_elems * data_dimension
-            int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
-            int index, elem
+            int i, j
+            int n_target    = len(target_points)
+            int n_elems     = self.grid.n_elems
+            int data_size   = 0
 
-            int size = 0
-
-            DTYPE_I_t[::1] rows = np.ones(n_target * n_columns, dtype=DTYPE_I) * -1
-            DTYPE_I_t[::1] cols = np.ones(n_target * n_columns, dtype=DTYPE_I) * -1
-            DTYPE_F_t[::1] data = np.ones(n_target * n_columns, dtype=DTYPE_F) * -1    
             int use_threads = min(8, np.ceil(n_target / 800))
 
-            int MX_ELEMENTS_PER_POINT = self.grid_obj.MX_ELEMENTS_PER_POINT
-        
-        cdef:
-            dict data_dict
+            
             
         if self.logging:
             self.logger.log(f"Interpolation prepared successfully", "INFO")
-            data_dict = {
-                "weights": np.asarray(weights),
-                "connectivity_idx": np.asarray(connectivity_idx),
-                "neumann_ws": np.asarray(neumann_ws)
-            }
-            self.logger.json(method + "_" + variable, data_dict)
+        
+        
+        cdef:
+            int point
+            DTYPE_I_t[::1] rows = np.ones(data_size, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] cols = np.ones(data_size, dtype=DTYPE_I) * -1
+            DTYPE_F_t[::1] data = np.ones(data_size, dtype=DTYPE_F) * -1    
 
-        if return_value:
-            
-            # Multiply the weights by the connectivity, element-wise, and sum  
-            for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
-                for k in range(data_dimension):
-                    for j in range(self.grid_obj.MX_ELEMENTS_PER_POINT):
-                        index = i * n_columns + j * data_dimension + k
-                        elem = connectivity_idx[i, j]
-                        if elem == -1:
-                            continue
-                        result[i, k] += weights[i, j] * source_data[elem * data_dimension + k]
-
-            # Remove unnecessary dimensions
-            return np.asarray(np.squeeze(result)), np.asarray(neumann_ws)
-
-        else:
-            # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
-            size = 0
-            index = 0
-            for i in range(n_target): 
-                for j in range(MX_ELEMENTS_PER_POINT):
-                    for k in range(data_dimension):
-                        if connectivity_idx[i, j] == -1:
-                            continue
-                        rows[index] = i
-                        cols[index] = connectivity_idx[i, j] * data_dimension + k
-                        data[index] = weights[i, j * data_dimension + k] + neumann_ws[i]
-                        index += 1
-
-            # Get smallest index where data is -1
-            size = np.where(np.asarray(data) == -1)[0][0]
-
-            weights_sparse = sp.csr_matrix((np.asarray(data)[:size], 
-                                           (np.asarray(rows)[:size], np.asarray(cols)[:size])), 
-                                           shape=(n_target, n_elems))
-            weights_sparse.eliminate_zeros()
-            
-            return weights_sparse, np.asarray(neumann_ws)
+        # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
+        index = 0
+        for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
+            for j in range(self.grid.esup_ptr[point], self.grid.esup_ptr[point + 1]):
+                point   = target_points[i]
+                rows[j] = point
+                cols[j] = self.grid.esup[j]
+                data[j] = weights[i, j - self.grid.esup_ptr[point]] + neumann_ws[i]
+        
+        
+        weights_sparse = sp.csr_matrix((data, (rows, cols)), 
+                                        shape=(n_target, n_elems))
+        weights_sparse.eliminate_zeros()
+        
+        return weights_sparse, np.asarray(neumann_ws)
 
     cdef tuple prepare_interpolator(self, str method, str variable,
-                                    const int data_dimension, 
                                     const DTYPE_I_t[::1] target_points):
-        
-        
-        cdef: 
+        """
+        Every interpolation method shall be called with:
+            - The Grid
+            - The Target Points
+            - Cell Data
+            - Point Data
+            - Weights Matrix  (out)
+            - Neumann Weights (out)
+
+        """
+        cdef:
             int n_target = len(target_points)
-            int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
-            int dim = self.grid_obj.dim
-
-            int nm_flag_index, nm_index
-            int permeability_index, diff_mag_index
-
-            DTYPE_I_t[:, ::1] connectivity_idx  = np.ones((n_target, self.grid_obj.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
-            DTYPE_F_t[:, ::1] weights           = np.zeros((n_target, n_columns), dtype=DTYPE_F)
-
-            DTYPE_F_t[:, ::1] target_coordinates = np.asarray(self.grid_obj.point_coords)[target_points]
-            DTYPE_F_t[:, ::1] source_coordinates = self.grid_obj.centroids 
-
-            int point, elem, first, last, i, j, k
-            int use_threads = min(8, np.ceil(n_target / 800))
-
-            DTYPE_I_t[::1] in_points, neumann_point
-            DTYPE_F_t[:, :, ::1] permeability = np.zeros((self.grid_obj.n_elems, dim, dim), dtype=DTYPE_F)
-            DTYPE_F_t[::1] diff_mag    = np.zeros(self.grid_obj.n_elems, dtype=DTYPE_F)
-            DTYPE_F_t[::1] neumann_val = np.zeros(self.grid_obj.n_points, dtype=DTYPE_F)
+            int n_columns = self.grid.MX_ELEMENTS_PER_POINT
+            DTYPE_F_t[:, ::1] weights  = np.zeros((n_target, n_columns), dtype=DTYPE_F)
             DTYPE_F_t[::1] neumann_ws  = np.zeros(n_target, dtype=DTYPE_F)
-
         
-        # Populate connectivity_idx
-        omp_set_num_threads(use_threads)
-        for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
-            point = target_points[i]
-            first = self.grid_obj.esup_ptr[point]
-            last = self.grid_obj.esup_ptr[point + 1]
-            for j, elem in enumerate(self.grid_obj.esup[first:last]):
-                connectivity_idx[i, j] = elem
 
-        if method == "gls":
-            
-            in_points     = np.where(np.asarray(self.grid_obj.boundary_points) == 0)[0]
-            
-            nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
-            nm_index      = self.variable_to_index["points"]["neumann" + "_" + variable]
+        self.supported_methods[method](
+            self.grid, 
+            self.cells_data, self.points_data, 
+            self.variable_to_index, 
+            variable,
+            target_points, 
+            weights, neumann_ws
+        )
 
-            permeability_index = self.variable_to_index["cells"]["permeability"]
-            diff_mag_index     = self.variable_to_index["cells"]["diff_mag"]
-
-            neumann_point  = np.where(np.asarray(self.points_data[nm_flag_index]) == 1)[0]
-            
-            permeability   = np.reshape(self.cells_data[permeability_index], 
-                                       (self.grid_obj.n_elems, dim, dim))
-
-            diff_mag      = self.cells_data[diff_mag_index]
-            neumann_val   = self.points_data[nm_index]
-
-            
-            self.supported_methods[method](
-                self.grid_obj, 
-                in_points, neumann_point,
-                permeability, diff_mag,
-                neumann_val,
-                weights, neumann_ws
-            )
-
-        if method == "regls":
-            """
-            cdef void GLS(self, Grid grid, const DTYPE_I_t[::1] points, 
-            DTYPE_F_t[:, :, ::1] permeability, 
-            const DTYPE_F_t[::1] diff_mag, 
-            const DTYPE_I_t[::1] neumann_point, const DTYPE_F_t[::1] neumann_val,
-            DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
-            """
-
-            permeability_index = self.variable_to_index["cells"]["permeability"]
-            permeability  = np.reshape(self.cells_data[permeability_index], 
-                                      (self.grid_obj.n_elems, dim, dim))
-                                      
-            nm_flag_index = self.variable_to_index["points"]["neumann_flag"]
-            nm_index      = self.variable_to_index["points"]["neumann" + "_" + variable]
-
-            
-            diff_mag_index     = self.variable_to_index["cells"]["diff_mag"]
-
-            permeability  = np.reshape(self.cells_data[permeability_index], 
-                                      (self.grid_obj.n_elems, dim, dim))
-
-            diff_mag      = self.cells_data[diff_mag_index]
-            
-            neumann_point = np.asarray(self.points_data[nm_flag_index]).astype(DTYPE_I) 
-            neumann_val   = self.points_data[nm_index]
-
-            self.regls.GLS(
-                self.grid_obj, 
-                target_points, 
-                permeability, 
-                diff_mag, 
-                neumann_point, 
-                neumann_val,
-                weights, 
-                neumann_ws
-            )
-
-
-
-        if method == "idw":
-            self.supported_methods[method](
-                dim,
-                target_coordinates, source_coordinates, 
-                connectivity_idx, weights
-            )
-        
-        return weights, connectivity_idx, neumann_ws
-
-
+        return weights, neumann_ws
