@@ -29,7 +29,8 @@ ext_data = [
             name = f'{project_name}._interpolator.grid',
             sources = [
                 os.path.join(directory_path, project_name, '_interpolator', 'grid.pyx')
-            ]
+            ],
+            language='c++'
         ),
         Extension(
             name = f'{project_name}._methods.idw',
@@ -63,6 +64,8 @@ for e in ext_data:
     e.include_dirs       = [np.get_include()]
     if is_debug:
         e.define_macros.append(('CYTHON_TRACE_NOGIL', '1'))
+        e.define_macros.append(('CYTHON_TRACE', '1'))
+        e.define_macros.append(('CYTHON_REFNANNY', '1'))
 
 directives = {
     'boundscheck'       : False if not is_debug else True,

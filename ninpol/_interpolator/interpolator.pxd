@@ -43,6 +43,8 @@ cdef class Interpolator:
     cdef readonly int logging
     cdef readonly Logger logger
 
+    cdef readonly int build_edges
+
     cdef readonly int is_grid_initialized
 
     cdef tuple process_mesh(self, object mesh)

@@ -1,10 +1,6 @@
 import numpy as np
-import scipy as sp
 
-from cython.parallel import prange
-from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from libcpp.unordered_map cimport unordered_map
-from libc.stdio cimport printf
 from libc.math cimport sqrt
 
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME

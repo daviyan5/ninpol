@@ -18,7 +18,7 @@ DTYPE_F = np.float64
 
 cdef class Interpolator:
 
-    def __cinit__(self, str name = "interpolator", int logging = False):
+    def __cinit__(self, str name = "interpolator", int logging = False, int build_edges = False):
         # Load point-ordering.yaml 
         import yaml
         import os
@@ -33,7 +33,7 @@ cdef class Interpolator:
             self.point_ordering = yaml.load(f, Loader=yaml.FullLoader)
 
         self.is_grid_initialized = False
-
+        self.build_edges = build_edges
 
         self.gls = GLSInterpolation(logging)
 
@@ -227,7 +227,7 @@ cdef class Interpolator:
                 nfael, lnofa, lpofa, 
                 nedel, lpoed,
                 connectivity, element_types,
-                self.logging)
+                self.logging, self.build_edges)
 
     
     cdef void load_data(self, dict data_dict, str data_type):

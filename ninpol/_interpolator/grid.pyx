@@ -16,6 +16,12 @@ DTYPE_F = np.float64
 
 
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
+from libc.stdlib cimport malloc, free
+from libcpp.algorithm cimport sort
+from libcpp.unordered_map cimport unordered_map
+from libcpp.string cimport string, to_string
+from ctypes import sizeof as csizeof
+
 
 cdef class Grid:
     def __cinit__(self, DTYPE_I_t dim, 
@@ -24,7 +30,7 @@ cdef class Grid:
                         DTYPE_I_t[::1] nfael, DTYPE_I_t[:, ::1] lnofa, DTYPE_I_t[:, :, ::1] lpofa, 
                         DTYPE_I_t[::1] nedel, DTYPE_I_t[:, :, ::1] lpoed,
                         DTYPE_I_t[:, ::1] connectivity, DTYPE_I_t[::1] element_types,
-                        int logging = False):
+                        int logging = False, int build_edges = False):
 
         if dim < 1:
             raise ValueError("The number of dimensions must be greater than 0.")
@@ -48,6 +54,8 @@ cdef class Grid:
         
         self.logging = logging
         self.logger  = Logger("Grid", True)
+
+        self.build_edges = build_edges
 
         def _validate_shape(array, expected_shape):
             if array.shape != expected_shape:
@@ -145,7 +153,12 @@ cdef class Grid:
         self.measure_time(self.build_esuel, "build esuel")
 
         # Calculate the edges surrounding each element
-        self.measure_time(self.build_inedel, "build inedel")
+        if self.build_edges:
+            if self.logging:
+                self.logger.log("Grid will build edge data.", "INFO")
+            self.measure_time(self.build_inedel, "build inedel")
+        elif self.logging:
+                self.logger.log("Grid will not build edge data.", "INFO")
 
         self.are_structures_built = True
     
@@ -220,27 +233,28 @@ cdef class Grid:
         # Resize the psup array to remove padding
         self.psup = self.psup[:stor_ptr]
 
+
     cdef void build_infael(self):
         cdef:
             int i, j, k
             int elem_type
 
-            # Stores the points (in relation to the global point index) of the face
             DTYPE_I_t[::1] elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
             DTYPE_I_t[::1] sorted_elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
-            # Stores the index of the points in the element (in relation to the element's local point index)
-            DTYPE_I_t[::1] elem_face_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-
             # Stores the string representation of the face, for hashing
-            str elem_face_str
-            dict faces_dict = {}
+            string elem_face_str
+            string empty b""
+            string sep = b"," 
+            unordered_map[string, int] faces_dict
 
             int current_face_index = 0
             int unused_spaces
             int face_index = 0
 
             int faces_upper_bound = self.n_elems * NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT
+
+            int MAX_POINTS_PER_FACE = NinpolSizes.NINPOL_MAX_POINTS_PER_FACE
 
         self.inpofa = np.ones((faces_upper_bound, NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
         self.infael = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
@@ -251,36 +265,36 @@ cdef class Grid:
             
             # For each face
             for j in range(self.nfael[elem_type]):
-                elem_face_str = ""
-                elem_face_index = self.lpofa[elem_type, j]
+                elem_face_str = empty
 
                 for k in range(self.lnofa[elem_type, j]):
-                    elem_face[k] = self.inpoel[i, elem_face_index[k]]
+                    elem_face[k] = self.inpoel[i, self.lpofa[elem_type, j, k]]
+                    sorted_elem_face[k] = elem_face[k]
 
-                unused_spaces = NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - self.lnofa[elem_type, j]
+                unused_spaces = MAX_POINTS_PER_FACE - self.lnofa[elem_type, j]
 
                 for k in range(unused_spaces):
-                    elem_face[NinpolSizes.NINPOL_MAX_POINTS_PER_FACE - k - 1] = -1
+                    elem_face[MAX_POINTS_PER_FACE - k - 1]        = -1
+                    sorted_elem_face[MAX_POINTS_PER_FACE - k - 1] = -1
 
-                sorted_elem_face = np.sort(elem_face)
+                sort(&sorted_elem_face[0], (&sorted_elem_face[0]) + MAX_POINTS_PER_FACE)
                 for k in range(self.lnofa[elem_type, j]):
-                    elem_face_str += str(sorted_elem_face[k + unused_spaces]) + ","
+                    elem_face_str.append(to_string(sorted_elem_face[k + unused_spaces]))
+                    elem_face_str.append(sep)
                     
-
-                if faces_dict.get(elem_face_str) is None:
-                    face_index = current_face_index
-                    current_face_index += 1
+                if faces_dict.count(elem_face_str) == 0:
+                    
+                    face_index                = faces_dict.size()
                     faces_dict[elem_face_str] = face_index
 
                     for k in range(self.lnofa[elem_type, j]):
                         self.inpofa[face_index, k] = elem_face[k]
-
+                    
                 else:
                     face_index = faces_dict[elem_face_str]
                 self.infael[i, j] = face_index
 
-        
-        self.n_faces = current_face_index
+        self.n_faces = faces_dict.size()
         self.inpofa = self.inpofa[:self.n_faces]
     
     cdef void build_fsup(self):
@@ -473,19 +487,21 @@ cdef class Grid:
             DTYPE_I_t[::1] elem_edge = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
             DTYPE_I_t[::1] sorted_elem_edge = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
 
-            # Stores the index of the points in the element (in relation to the element's local point index)
-            DTYPE_I_t[::1] elem_edge_index = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
-
             # Stores the string representation of the edge, for hashing
-            str elem_edge_str
-            dict edges_dict = {}
+            string elem_edge_str
+            string empty b""
+            string sep = b","
+            unordered_map[string, int] edges_dict
 
             int current_edge_index = 0
             int edge_index = 0
 
-        self.inedel = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT), dtype=DTYPE_I) * -1
-        self.inpoed = np.ones((self.n_elems * NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 
-                               NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE), dtype=DTYPE_I) * -1
+            int MAX_EDGES_PER_ELEMENT = NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT
+            int MAX_POINTS_PER_EDGE = NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE
+
+        self.inedel = np.ones((self.n_elems, MAX_EDGES_PER_ELEMENT), dtype=DTYPE_I) * -1
+        self.inpoed = np.ones((self.n_elems * MAX_EDGES_PER_ELEMENT, 
+                               MAX_POINTS_PER_EDGE), dtype=DTYPE_I) * -1
         
         # For each element
         for i in range(self.n_elems):
@@ -493,20 +509,22 @@ cdef class Grid:
 
             # For each edge
             for j in range(self.nedel[elem_type]):
-                elem_edge_str = ""
-                elem_edge_index = self.lpoed[elem_type, j]
-
+                elem_edge_str = empty
+                
                 # Assume there's the exacly same amount of points in each edge (usually 2)
                 for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
-                    elem_edge[k] = self.inpoel[i, elem_edge_index[k]]
+                    elem_edge[k] = self.inpoel[i, self.lpoed[elem_type, j, k]]
+                    sorted_elem_edge[k] = elem_edge[k]
 
-                sorted_elem_edge = np.sort(elem_edge)
-                for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
-                    elem_edge_str += str(sorted_elem_edge[k]) + ","
+                if elem_edge[0] > elem_edge[1]:
+                    sorted_elem_edge[0], sorted_elem_edge[1] = sorted_elem_edge[1], sorted_elem_edge[0]
                 
-                if edges_dict.get(elem_edge_str) is None:
-                    edge_index = current_edge_index
-                    current_edge_index += 1
+                for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
+                    elem_edge_str.append(to_string(sorted_elem_edge[k]))
+                    elem_edge_str.append(sep)
+                
+                if edges_dict.count(elem_edge_str) == 0:
+                    edge_index = edges_dict.size()
                     edges_dict[elem_edge_str] = edge_index
 
                     for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
@@ -516,7 +534,7 @@ cdef class Grid:
                     edge_index = edges_dict[elem_edge_str]
                 self.inedel[i, j] = edge_index
         
-        self.n_edges = current_edge_index
+        self.n_edges = edges_dict.size()
         self.inpoed = self.inpoed[:self.n_edges]
 
                     
