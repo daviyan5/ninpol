@@ -58,8 +58,10 @@ cdef class GLSInterpolation:
             DTYPE_I_t[::1] Svb = self.array((max(1, grid.MX_FACES_PER_POINT),), "l")
         
         cdef:
-            DTYPE_F_t[::1, :] Mi = view.array((grid.MX_ELEMENTS_PER_POINT + 3 * grid.MX_FACES_PER_POINT + grid.MX_FACES_PER_POINT, 3 * grid.MX_ELEMENTS_PER_POINT + 1), "d", mode='fortran')
-            DTYPE_F_t[::1, :] Ni = view.array((grid.MX_ELEMENTS_PER_POINT + 3 * grid.MX_FACES_PER_POINT + grid.MX_FACES_PER_POINT, grid.MX_ELEMENTS_PER_POINT + 1), "d", mode='fortran')
+            DTYPE_F_t[::1, :] Mi = view.array((grid.MX_ELEMENTS_PER_POINT + 3 * grid.MX_FACES_PER_POINT + grid.MX_FACES_PER_POINT, 
+                                               3 * grid.MX_ELEMENTS_PER_POINT + 1), itemsize=sizeof(double), format = "d", mode='fortran')
+            DTYPE_F_t[::1, :] Ni = view.array((grid.MX_ELEMENTS_PER_POINT + 3 * grid.MX_FACES_PER_POINT + grid.MX_FACES_PER_POINT, 
+                                               grid.MX_ELEMENTS_PER_POINT + 1), itemsize=sizeof(double), format = "d", mode='fortran')
 
         cdef:
             DTYPE_F_t[::1] xv = self.array((3,), "d")

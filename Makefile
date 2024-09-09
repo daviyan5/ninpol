@@ -5,7 +5,7 @@ all:
 
 install: compile
 	@echo "Installing..."
-	@pip install .
+	@python3 -m pip install .
 	@echo "Done"
 compile:
 	@echo "Compilling..."
@@ -17,7 +17,7 @@ clean:
 	@echo "Done"
 debug: compile_debug
 	@echo "Installing..."
-	@pip install .
+	@python3 -m pip install .
 	@echo "Done"
 compile_debug:
 	@echo "Compilling in debug mode..."
