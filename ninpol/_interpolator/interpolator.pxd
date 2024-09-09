@@ -15,6 +15,7 @@ from .logger cimport Logger
 
 from .._methods.idw cimport IDWInterpolation
 from .._methods.gls cimport GLSInterpolation
+from .._methods.ls  cimport LSInterpolation
 
 ctypedef long DTYPE_I_t
 ctypedef double DTYPE_F_t
@@ -31,6 +32,7 @@ cdef class Interpolator:
 
     cdef readonly GLSInterpolation gls
     cdef readonly IDWInterpolation idw
+    cdef readonly LSInterpolation ls
     
     cdef readonly dict variable_to_index
 
@@ -48,6 +50,7 @@ cdef class Interpolator:
     cdef readonly int is_grid_initialized
 
     cdef tuple process_mesh(self, object mesh)
+    cpdef void load_mesh(self, str filename = *, object mesh_obj = *)
 
     cdef void load_cell_data(self)
     cdef void load_point_data(self)
@@ -56,6 +59,8 @@ cdef class Interpolator:
 
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability)
 
+    cpdef tuple interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = *)
+    
     cdef tuple prepare_interpolator(self, str method, str variable,
                                     const DTYPE_I_t[::1] target_points)
 

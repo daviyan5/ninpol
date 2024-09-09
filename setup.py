@@ -46,6 +46,12 @@ ext_data = [
             language='c++'
         ),
         Extension(
+            name = f'{project_name}._methods.ls',
+            sources = [
+                os.path.join(directory_path, project_name, '_methods', 'ls.pyx')
+            ]
+        ),
+        Extension(
             name = f'{project_name}._interpolator.logger',
             sources = [
                 os.path.join(directory_path, project_name, '_interpolator', 'logger.pyx')

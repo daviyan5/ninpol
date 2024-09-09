@@ -22,6 +22,22 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.string cimport string, to_string
 from ctypes import sizeof as csizeof
 
+cdef size_t myhash(DTYPE_I_t[::1] vec, int unused_spaces):
+  cdef:
+    int i
+    int x
+    size_t seed = len(vec)
+    
+
+  for i in range(unused_spaces, len(vec)):
+    x = vec[i]
+    x = ((x >> 16) ^ x) * 0x45d9f3b
+    x = ((x >> 16) ^ x) * 0x45d9f3b
+    x = (x >> 16) ^ x
+    seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2)
+  
+  return seed
+
 
 cdef class Grid:
     def __cinit__(self, DTYPE_I_t dim, 
@@ -129,7 +145,7 @@ cdef class Grid:
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
-            self.logger.log(f"Time to {call_name}: {end_time - start_time:.3f} s", "INFO")
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
     cpdef void build(self):
         
@@ -246,10 +262,13 @@ cdef class Grid:
             string elem_face_str
             string empty b""
             string sep = b"," 
-            unordered_map[string, int] faces_dict
 
-            int current_face_index = 0
-            int unused_spaces
+            size_t key
+
+            int face_size
+            unordered_map[size_t, int] faces_dict
+
+            int unused_spaces = 0
             int face_index = 0
 
             int faces_upper_bound = self.n_elems * NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT
@@ -258,43 +277,45 @@ cdef class Grid:
 
         self.inpofa = np.ones((faces_upper_bound, NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
         self.infael = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
-
+        
+        self.n_faces = 0
         # For each element
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             
             # For each face
             for j in range(self.nfael[elem_type]):
-                elem_face_str = empty
-
-                for k in range(self.lnofa[elem_type, j]):
+                
+                face_size = self.lnofa[elem_type, j]
+                for k in range(face_size):
                     elem_face[k] = self.inpoel[i, self.lpofa[elem_type, j, k]]
                     sorted_elem_face[k] = elem_face[k]
 
-                unused_spaces = MAX_POINTS_PER_FACE - self.lnofa[elem_type, j]
+                unused_spaces = MAX_POINTS_PER_FACE - face_size
 
                 for k in range(unused_spaces):
                     elem_face[MAX_POINTS_PER_FACE - k - 1]        = -1
                     sorted_elem_face[MAX_POINTS_PER_FACE - k - 1] = -1
 
                 sort(&sorted_elem_face[0], (&sorted_elem_face[0]) + MAX_POINTS_PER_FACE)
-                for k in range(self.lnofa[elem_type, j]):
-                    elem_face_str.append(to_string(sorted_elem_face[k + unused_spaces]))
-                    elem_face_str.append(sep)
+                # for k in range(face_size):
+                #     elem_face_str.append(to_string(sorted_elem_face[k + unused_spaces]))
+                #     elem_face_str.append(sep)
+                key = myhash(sorted_elem_face, unused_spaces)
+                if faces_dict.count(key) == 0:
                     
-                if faces_dict.count(elem_face_str) == 0:
-                    
-                    face_index                = faces_dict.size()
-                    faces_dict[elem_face_str] = face_index
+                    face_index = self.n_faces
+                    faces_dict[key] = face_index
 
-                    for k in range(self.lnofa[elem_type, j]):
+                    for k in range(face_size):
                         self.inpofa[face_index, k] = elem_face[k]
                     
+                    self.n_faces += 1
+                    
                 else:
-                    face_index = faces_dict[elem_face_str]
+                    face_index = faces_dict[key]
                 self.infael[i, j] = face_index
 
-        self.n_faces = faces_dict.size()
         self.inpofa = self.inpofa[:self.n_faces]
     
     cdef void build_fsup(self):

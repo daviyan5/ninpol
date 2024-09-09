@@ -1,13 +1,10 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
 cimport numpy as cnp
-cimport scipy.linalg.cython_lapack as lapack
-cimport scipy.linalg.cython_blas as blas
 
 cnp.import_array()                  # Needed to use NumPy C API
 
 ctypedef long DTYPE_I_t
 ctypedef double DTYPE_F_t
-from cython cimport view
 
 from .._interpolator.logger cimport Logger
 from .._interpolator.grid cimport Grid
@@ -26,4 +23,8 @@ cdef class LSInterpolation:
                       str variable,
                       const DTYPE_I_t[::1] target_points,
                       DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
+    
+    cdef void LS(self, Grid grid,
+                 const DTYPE_I_t[::1] points, const DTYPE_I_t[::1] neumann_point,
+                 DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
 

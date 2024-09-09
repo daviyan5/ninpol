@@ -39,7 +39,7 @@ cdef class GLSInterpolation:
             const DTYPE_I_t[::1] neumann_point        = np.asarray(points_data[neumann_flag_index]).astype(DTYPE_I)
 
             const DTYPE_F_t[::1] neumann_val          = points_data[neumann_val_index]
-        
+                
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
         
     cdef void GLS(self, Grid grid, const DTYPE_I_t[::1] points, 
@@ -75,6 +75,8 @@ cdef class GLSInterpolation:
 
 
         for point in points:
+            if grid.boundary_points[point] and not neumann_point[point]: 
+                continue
             clock_gettime(CLOCK_REALTIME, &ts)
             start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
@@ -85,8 +87,7 @@ cdef class GLSInterpolation:
                 face = grid.fsup[i]
                 if grid.boundary_faces[face] == 1:
                     n_bface += 1
-            if n_bface >= 1 and neumann_point[point] == 0:                  # Ignore boundary points that are not Neumann
-                continue
+            
             KSetv = self.array((n_elem,),  "l")
             Sv    = self.array((n_face,),  "l")
             Svb   = self.array((max(1, n_bface),), "l")

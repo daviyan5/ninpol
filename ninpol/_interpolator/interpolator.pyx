@@ -39,9 +39,12 @@ cdef class Interpolator:
 
         self.idw = IDWInterpolation(logging)
 
+        self.ls  = LSInterpolation(logging)
+
         self.supported_methods = {
             "gls": self.gls.prepare,
-            "idw": self.idw.prepare
+            "idw": self.idw.prepare,
+            "ls":  self.ls.prepare
         }
 
         self.variable_to_index = {
@@ -64,12 +67,12 @@ cdef class Interpolator:
         self.logger  = Logger(name)
 
     
-    def load_mesh(self, str filename = "", object mesh_obj = None):
+    cpdef void load_mesh(self, str filename = "", object mesh_obj = None):
         if filename == "" and mesh_obj is None:
             raise ValueError("Filename for the mesh or meshio.Mesh object must be provided.")
         # Loads a mesh from a file
         
-
+        
         if filename != "":
             if self.logging:
                 self.logger.log(f"Reading mesh from {filename}", "INFO")
@@ -82,15 +85,25 @@ cdef class Interpolator:
         cdef tuple args = self.process_mesh(self.mesh_obj)
 
         self.grid = Grid(*args)
+        cdef:
+            double start_time = 0., end_time = 0.
+            timespec ts
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
         self.grid.build()
         self.grid.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
         self.grid.calculate_centroids()
         self.grid.calculate_normal_faces()
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
-        cdef:
-            double start_time = 0., end_time = 0.
-            timespec ts
+        if self.logging:
+            self.logger.log(f"Grid built in {end_time - start_time:.2f} seconds", "INFO")
+
+        
         
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
@@ -363,7 +376,7 @@ cdef class Interpolator:
             data_index = self.variable_to_index["points"][variable]
             return np.asarray(self.points_data[data_index])[index]
 
-    def interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
+    cpdef tuple interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
         
         if not self.is_grid_initialized:
             raise ValueError("Grid not initialized. Please load a mesh first.")
@@ -436,6 +449,8 @@ cdef class Interpolator:
                 cols[j] = self.grid.esup[j]
                 data[j] = weights[i, j - self.grid.esup_ptr[point]] + neumann_ws[i]
         
+        cdef:
+            object weights_sparse
         weights_sparse = sp.csr_matrix((data, (rows, cols)), 
                                         shape=(n_target, n_elems))
         weights_sparse.eliminate_zeros()
