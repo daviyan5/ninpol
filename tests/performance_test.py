@@ -21,7 +21,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.analytical import LINCase, QUADCase, FANcase, ALHcase
 
 from colorama import Fore, Style
-from results import test_graphs
 from memory_profiler import memory_usage
 
 # Test parameters
@@ -35,7 +34,7 @@ def enable_print():
     sys.stdout = sys.__stdout__
 
 def write_results(results_dict):
-    with open("./results/performance.yaml", "w") as f:
+    with open("./results/yaml/performance.yaml", "w") as f:
         yaml.dump(results_dict, f)
 
 def export_vtk(mesh, output_dir, filename):
@@ -92,7 +91,8 @@ class TestPerformance:
         if ".gitkeep" in files:
             files.remove(".gitkeep")
         
-        max_size = 100
+        conf_yaml = yaml.safe_load(open("./config.yaml", "r"))
+        max_size = conf_yaml["max_size"]
         # Remove "box" meshes
         new_files = []
         for file in files:
@@ -148,15 +148,15 @@ class TestPerformance:
         results_dict = {
             case.name: {
                 mtype : {
-                    method: {
-                        "time": [],
-                        "memory": []
-                    } for method in interpolator.supported_methods
+                    "methods": {
+                        method: {
+                            "time": [],
+                            "memory": []
+                        } for method in interpolator.supported_methods
+                    }
                 } for mtype in mesh_types
             } for case in cases
         }
-
-        results_dict["datetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
         for case in cases:
             for mtype in mesh_types:
@@ -178,10 +178,11 @@ class TestPerformance:
                     case.assign_mesh_properties(mesh_path)
                     pickle.dump(case, open(f"/tmp/{case.name}_{mesh_filename}.pkl", "wb"))
                 enable_print()
-
+                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
+                results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
                 
                 n_methods = len(interpolator.supported_methods)
-                n_repeats = 3
+                n_repeats = conf_yaml["n_repeats"]
 
                 build_time = 0.
                 for r in range(n_repeats):
@@ -232,16 +233,15 @@ class TestPerformance:
                     style(idx_str, mesh_filename, case.name, case.mesh.points.shape[0], method, build_time, interpolate_time, memory)
 
                     
-                    results_dict[case.name][mtype][method]["time"].append(interpolate_time)
-                    results_dict[case.name][mtype][method]["memory"].append(memory)
+                    results_dict[case.name][mtype]["methods"][method]["time"].append(interpolate_time)
+                    results_dict[case.name][mtype]["methods"][method]["memory"].append(memory)
                     write_results(results_dict)              
                 
-                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
-                results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
+                
             print("==========================================================================================")
             if i < n_files - 1:
                 style("INDEX", "FILE", "CASE", "POINT", "METHOD", "BUILD", "INTER", "MEM", True)
-
+        write_results(results_dict)   
 def create_script(script_path, case_name, method, vtk_filename):
     # Write the Python script to the specified path
     script = f"""

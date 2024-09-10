@@ -21,7 +21,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.analytical import LINCase, QUADCase, FANcase, ALHcase
 
 from colorama import Fore, Style
-from results import test_graphs
 from memory_profiler import memory_usage
 
 # Test parameters
@@ -35,14 +34,14 @@ def enable_print():
     sys.stdout = sys.__stdout__
 
 def write_results(results_dict):
-    with open("./results/accuracy.yaml", "w") as f:
+    with open("./results/yaml/accuracy.yaml", "w") as f:
         yaml.dump(results_dict, f)
 
 def export_vtu(cells, points, cell_data, point_data, output_dir, filename):
     mesh = meshio.Mesh(points, cells, cell_data=cell_data, point_data=point_data)
     mesh_filename = f"{output_dir}/{filename}_acc.vtu"
 
-    if os.path.exists(mesh_filename):
+    if not os.path.exists(mesh_filename):
         meshio.write(mesh_filename, mesh)
     
     return mesh_filename
@@ -61,7 +60,8 @@ class TestAccuracy:
         if ".gitkeep" in files:
             files.remove(".gitkeep")
         
-        max_size = 100
+        conf_yaml = yaml.safe_load(open("./config.yaml", "r"))
+        max_size = conf_yaml["max_size"]
         # Remove "box" meshes
         new_files = []
         for file in files:
@@ -109,9 +109,11 @@ class TestAccuracy:
         results_dict = {
             case.name: {
                 mtype : {
-                    method: {
-                        "error": [],
-                    } for method in interpolator.supported_methods
+                    "methods":{
+                        method: {
+                            "error": [],
+                        } for method in interpolator.supported_methods
+                    }
                 } for mtype in mesh_types
             } for case in cases
         }
@@ -120,7 +122,6 @@ class TestAccuracy:
                 results_dict[case.name][mtype]["n_points"] = []
                 results_dict[case.name][mtype]["n_vols"]   = []
 
-        results_dict["datetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
         for i, mesh_filename in enumerate(files):
             
@@ -140,6 +141,8 @@ class TestAccuracy:
                     case.assign_mesh_properties(mesh_path)
                     pickle.dump(case, open(f"/tmp/{case.name}_{mesh_filename}.pkl", "wb"))
                 enable_print()
+                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
+                results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
 
                 if j == 0:
                     cells       = case.mesh.cells
@@ -176,14 +179,11 @@ class TestAccuracy:
                     style(idx_str, mesh_filename, case.mesh.points.shape[0], case.name, method, error)
 
                     
-                    results_dict[case.name][mtype][method]["error"].append(float(error))
-                    write_results(results_dict)              
-                
-                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
-                results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
-
-            vtu_filename = export_vtu(cells, points, cell_data, point_data, output_dir, mesh_filename.split(".")[0])
-            print(f"Exported {vtu_filename}...")
+                    results_dict[case.name][mtype]["methods"][method]["error"].append(float(error))
+                    write_results(results_dict)    
+            if conf_yaml["export_mesh"]:           
+                vtu_filename = export_vtu(cells, points, cell_data, point_data, output_dir, mesh_filename.split(".")[0])
             print("============================================================")
             if i < n_files - 1:
                 style("INDEX", "FILE", "POINT", "CASE", "METHOD", "ERROR", header=True)
+        write_results(results_dict)   

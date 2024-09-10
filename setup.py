@@ -67,7 +67,7 @@ for e in ext_data:
     e.extra_compile_args = ['-O3', '-fopenmp'] if not is_debug else ['-O0', '-g', '-fopenmp']
     e.extra_link_args    = ['-fopenmp']
     e.define_macros      = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
-    e.include_dirs       = [np.get_include()]
+    e.include_dirs       = [np.get_include(), os.path.join(directory_path, project_name, 'utils')]
     if is_debug:
         e.define_macros.append(('CYTHON_TRACE_NOGIL', '1'))
         e.define_macros.append(('CYTHON_TRACE', '1'))

@@ -26,3 +26,4 @@ compile_debug:
 test:
 	@echo "Testing..."
 	@pytest -s --tb=short
+	@python3 ./tests/results/graph.py

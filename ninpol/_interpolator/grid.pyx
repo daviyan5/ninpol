@@ -18,11 +18,12 @@ DTYPE_F = np.float64
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 from libc.stdlib cimport malloc, free
 from libcpp.algorithm cimport sort
-from libcpp.unordered_map cimport unordered_map
 from libcpp.string cimport string, to_string
 from ctypes import sizeof as csizeof
 
-cdef size_t myhash(DTYPE_I_t[::1] vec, int unused_spaces):
+from ..utils.robin_hood cimport unordered_map
+
+cdef size_t myhash(DTYPE_I_t[::1] vec, int unused_spaces) noexcept nogil:
   cdef:
     int i
     int x
@@ -31,10 +32,10 @@ cdef size_t myhash(DTYPE_I_t[::1] vec, int unused_spaces):
 
   for i in range(unused_spaces, len(vec)):
     x = vec[i]
-    x = ((x >> 16) ^ x) * 0x45d9f3b
-    x = ((x >> 16) ^ x) * 0x45d9f3b
+    x = ((x >> 16) ^ x) * <unsigned int> 0x45d9f3b
+    x = ((x >> 16) ^ x) * <unsigned int> 0x45d9f3b
     x = (x >> 16) ^ x
-    seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2)
+    seed ^= x + <unsigned int> 0x9e3779b9 + (seed << 6) + (seed >> 2)
   
   return seed
 
@@ -134,45 +135,87 @@ cdef class Grid:
 
         self.normal_faces = np.zeros((0, 0),  dtype=DTYPE_F)
 
-    cdef void measure_time(self, object call, str call_name):
+    
+    cpdef void build(self):
+        
+        
+        # Calculate the elements surrounding each point
         cdef:
             double start_time = 0.0, end_time = 0.0
             timespec ts
         
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        call()
+        self.build_esup()
+        call_name = "build esup"
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        
+        
+        # Calculate the points surrounding each point
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        self.build_psup()
+        call_name = "build_psup"
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
             self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
-    cpdef void build(self):
-        
-        
-        # Calculate the elements surrounding each point
-        self.measure_time(self.build_esup, "build esup")
-        
-        # Calculate the points surrounding each point
-        self.measure_time(self.build_psup, "build psup")
-
         # Calculate the faces composing each element
-        self.measure_time(self.build_infael, "build infael")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        self.build_infael()
+        call_name = "build_infael"
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
         
         # Calculate the faces surrounding each point
-        self.measure_time(self.build_fsup, "build fsup")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        self.build_fsup()
+        call_name = "build_fsup"
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
         # Calculate the elements surrounding each face
-        self.measure_time(self.build_esuf, "build esuf")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        self.build_esuf()
+        call_name = "build esuf"
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
         
         # Calculate the elements surrounding each element
-        self.measure_time(self.build_esuel, "build esuel")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        self.build_esuel()
+        call_name = "build_esuel"
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
         # Calculate the edges surrounding each element
         if self.build_edges:
             if self.logging:
                 self.logger.log("Grid will build edge data.", "INFO")
-            self.measure_time(self.build_inedel, "build inedel")
+            clock_gettime(CLOCK_REALTIME, &ts)
+            start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+            self.build_inedel()
+            call_name = "build_inedel"
+            clock_gettime(CLOCK_REALTIME, &ts)
+            end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+            if self.logging:
+                self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
         elif self.logging:
                 self.logger.log("Grid will not build edge data.", "INFO")
 
@@ -258,11 +301,6 @@ cdef class Grid:
             DTYPE_I_t[::1] elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
             DTYPE_I_t[::1] sorted_elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
 
-            # Stores the string representation of the face, for hashing
-            string elem_face_str
-            string empty b""
-            string sep = b"," 
-
             size_t key
 
             int face_size
@@ -279,12 +317,14 @@ cdef class Grid:
         self.infael = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
         
         self.n_faces = 0
+
         # For each element
         for i in range(self.n_elems):
             elem_type = self.element_types[i]
             
             # For each face
             for j in range(self.nfael[elem_type]):
+                
                 
                 face_size = self.lnofa[elem_type, j]
                 for k in range(face_size):
@@ -297,10 +337,13 @@ cdef class Grid:
                     elem_face[MAX_POINTS_PER_FACE - k - 1]        = -1
                     sorted_elem_face[MAX_POINTS_PER_FACE - k - 1] = -1
 
+                
+
+                  
                 sort(&sorted_elem_face[0], (&sorted_elem_face[0]) + MAX_POINTS_PER_FACE)
-                # for k in range(face_size):
-                #     elem_face_str.append(to_string(sorted_elem_face[k + unused_spaces]))
-                #     elem_face_str.append(sep)
+                
+
+                
                 key = myhash(sorted_elem_face, unused_spaces)
                 if faces_dict.count(key) == 0:
                     
@@ -314,8 +357,10 @@ cdef class Grid:
                     
                 else:
                     face_index = faces_dict[key]
-                self.infael[i, j] = face_index
 
+                self.infael[i, j] = face_index
+            
+        
         self.inpofa = self.inpofa[:self.n_faces]
     
     cdef void build_fsup(self):
@@ -503,16 +548,14 @@ cdef class Grid:
         cdef:
             int i, j, k
             int elem_type
+            size_t hash_key
 
             # Stores the points (in relation to the global point index) of the edge
             DTYPE_I_t[::1] elem_edge = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
             DTYPE_I_t[::1] sorted_elem_edge = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE, dtype=DTYPE_I)
 
             # Stores the string representation of the edge, for hashing
-            string elem_edge_str
-            string empty b""
-            string sep = b","
-            unordered_map[string, int] edges_dict
+            unordered_map[int, int] edges_dict
 
             int current_edge_index = 0
             int edge_index = 0
@@ -530,7 +573,6 @@ cdef class Grid:
 
             # For each edge
             for j in range(self.nedel[elem_type]):
-                elem_edge_str = empty
                 
                 # Assume there's the exacly same amount of points in each edge (usually 2)
                 for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
@@ -540,19 +582,17 @@ cdef class Grid:
                 if elem_edge[0] > elem_edge[1]:
                     sorted_elem_edge[0], sorted_elem_edge[1] = sorted_elem_edge[1], sorted_elem_edge[0]
                 
-                for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
-                    elem_edge_str.append(to_string(sorted_elem_edge[k]))
-                    elem_edge_str.append(sep)
+                hash_key = myhash(sorted_elem_edge, 0)
                 
-                if edges_dict.count(elem_edge_str) == 0:
+                if edges_dict.count(hash_key) == 0:
                     edge_index = edges_dict.size()
-                    edges_dict[elem_edge_str] = edge_index
+                    edges_dict[hash_key] = edge_index
 
                     for k in range(int(NinpolSizes.NINPOL_MAX_POINTS_PER_EDGE)):
                         self.inpoed[edge_index, k] = elem_edge[k]
 
                 else:
-                    edge_index = edges_dict[elem_edge_str]
+                    edge_index = edges_dict[hash_key]
                 self.inedel[i, j] = edge_index
         
         self.n_edges = edges_dict.size()

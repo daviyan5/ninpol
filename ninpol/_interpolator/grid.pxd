@@ -7,6 +7,7 @@ from .logger cimport Logger
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
+
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from openmp cimport omp_lock_t, omp_init_lock, omp_destroy_lock, omp_set_lock, omp_unset_lock
 
@@ -185,10 +186,7 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[:, ::1] inpoed
     cdef readonly DTYPE_I_t[:, ::1] inedel
     
-    """
-        Measures the time taken by a function call.
-    """
-    cdef void measure_time(self, object call, str call_name)
+    
 
     """
         Builds the necessary grid data structures for the given connectivity matrix, that being:

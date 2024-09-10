@@ -1,6 +1,6 @@
 import numpy as np
 
-from libcpp.unordered_map cimport unordered_map
+from ..utils.robin_hood cimport unordered_map
 from libc.math cimport sqrt
 
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
