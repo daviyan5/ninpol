@@ -31,14 +31,14 @@ cdef class GLSInterpolation:
             int neumann_flag_index = variable_to_index["points"]["neumann_flag" + "_" + variable]
             int neumann_val_index  = variable_to_index["points"]["neumann" + "_" + variable]
 
-            DTYPE_F_t[:, :, ::1] permeability   = np.reshape(cells_data[permeability_index], 
+            DTYPE_F_t[:, :, ::1] permeability  = np.reshape(cells_data[permeability_index], 
                                                             (grid.n_elems, dim, dim))
             
-            const DTYPE_F_t[::1] diff_mag             = cells_data[diff_mag_index]
+            const DTYPE_F_t[::1] diff_mag      = cells_data[diff_mag_index]
 
-            const DTYPE_I_t[::1] neumann_point        = np.asarray(points_data[neumann_flag_index]).astype(DTYPE_I)
+            const DTYPE_I_t[::1] neumann_point = np.asarray(points_data[neumann_flag_index]).astype(DTYPE_I)
 
-            const DTYPE_F_t[::1] neumann_val          = points_data[neumann_val_index]
+            const DTYPE_F_t[::1] neumann_val   = points_data[neumann_val_index]
                 
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
         
@@ -314,6 +314,8 @@ cdef class GLSInterpolation:
             DTYPE_F_t[:, ::1] nL = self.array((n_bface, 3), "d")
         
         cdef:
+            int bpoint
+            int total_bpoints
             int n_dot = 3, m_dot = 3
             int incx = 1,  incy = 1
             DTYPE_F_t alpha = 1.0, beta = 0.0
@@ -322,7 +324,13 @@ cdef class GLSInterpolation:
             neumann_rows[i] = start + i
             Ks_Svb[i] = grid.esuf[grid.esuf_ptr[Svb[i]]]
             blas.dgemv("T", &m_dot, &n_dot, &alpha, &permeability[Ks_Svb[i, 0], 0, 0], &m_dot, &grid.normal_faces[Svb[i], 0], &incx, &beta, &nL[i, 0], &incy)
-            Ni[neumann_rows[i], n_elem] = neumann_val[Svb[i]]
+            total_bpoints = 0
+            for bpoint in grid.inpofa[Svb[i]]:
+                if bpoint == -1:
+                    break
+                total_bpoints += 1
+                Ni[neumann_rows[i], n_elem] += neumann_val[bpoint]
+            Ni[neumann_rows[i], n_elem] /= total_bpoints
         
         cdef:
             unordered_map[DTYPE_I_t, DTYPE_I_t] KSetv_map

@@ -1,0 +1,140 @@
+ALH:
+  hexa:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  prism:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  tetra:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+FAN:
+  hexa:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  prism:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  tetra:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+LIN:
+  hexa:
+    build:
+    - 0.0006730556488037109
+    gls:
+      memory:
+      - 64.6328125
+      time:
+      - 0.0010627905527750652
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  prism:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  tetra:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+QUAD:
+  hexa:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  prism:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+  tetra:
+    build: []
+    gls:
+      memory: []
+      time: []
+    idw:
+      memory: []
+      time: []
+    ls:
+      memory: []
+      time: []
+datetime: 2024-09-10 02:08

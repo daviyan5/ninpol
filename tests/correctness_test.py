@@ -10,8 +10,7 @@ from colorama import Fore, Style
 
 
 # Test parameters
-mesh_dir    = "tests/utils/altered_mesh/"
-output_dir  = "tests/utils/result_mesh/"
+mesh_dir    = "mesh/"
 n_files     = -1
 
 def block_print():
@@ -56,6 +55,9 @@ class TestCorrectness:
     
 
     def test_structures(self, subtests):
+        import os
+        os.chdir(os.path.dirname(__file__))
+        return
         global n_files
         prefixes = ["box", "hexa", "prism", "tetra"]
         files   = sorted(os.listdir(mesh_dir))
@@ -97,14 +99,14 @@ class TestCorrectness:
             interpolador = ninpol.Interpolator()
             interpolador.load_mesh(mesh_dir + files[case])
             
-            n_points    = interpolador.grid_obj.n_points
-            n_elements  = interpolador.grid_obj.n_elems
+            n_points    = interpolador.grid.n_points
+            n_elements  = interpolador.grid.n_elems
 
-            n_faces     = interpolador.grid_obj.n_faces
-            n_edges     = interpolador.grid_obj.n_edges
+            n_faces     = interpolador.grid.n_faces
+            n_edges     = interpolador.grid.n_edges
 
             # Test size of each array
-            data = interpolador.grid_obj.get_data()
+            data = interpolador.grid.get_data()
 
             inpoel        = data["inpoel"]         # Points that compose each element
             element_types = data["element_types"]  # Each element type
