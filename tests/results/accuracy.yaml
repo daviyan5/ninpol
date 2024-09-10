@@ -1,0 +1,171 @@
+ALH:
+  hexa:
+    gls:
+      error:
+      - 0.24888466838139472
+      - 0.14498879653249946
+    idw:
+      error:
+      - 0.24620488274975771
+      - 0.14830379399781501
+    ls:
+      error:
+      - 0.24620488274975771
+      - 0.14830379399781501
+    n_points:
+    - 125
+    n_vols:
+    - 64
+  prism:
+    gls:
+      error: []
+    idw:
+      error: []
+    ls:
+      error: []
+    n_points: []
+    n_vols: []
+  tetra:
+    gls:
+      error:
+      - 0.12134632367930898
+    idw:
+      error:
+      - 0.1347621322280351
+    ls:
+      error:
+      - 0.12760535089670857
+    n_points:
+    - 488
+    n_vols:
+    - 2003
+FAN:
+  hexa:
+    gls:
+      error:
+      - 0.6464825197536167
+      - 0.21142198013427013
+    idw:
+      error:
+      - 0.6464466094067263
+      - 0.2114194925252626
+    ls:
+      error:
+      - 0.6464466094067263
+      - 0.2114194925252626
+    n_points:
+    - 125
+    - 729
+    n_vols:
+    - 64
+    - 512
+  prism:
+    gls:
+      error: []
+    idw:
+      error: []
+    ls:
+      error: []
+    n_points: []
+    n_vols: []
+  tetra:
+    gls:
+      error:
+      - 0.216592370542668
+    idw:
+      error:
+      - 0.2363751385167797
+    ls:
+      error:
+      - 0.2186579069250292
+    n_points:
+    - 488
+    n_vols:
+    - 2003
+LIN:
+  hexa:
+    gls:
+      error:
+      - 4.4196944018192787e-17
+      - 1.0885984078193188e-16
+    idw:
+      error:
+      - 0.0
+      - 0.0
+    ls:
+      error:
+      - 0.0
+      - 0.0
+    n_points:
+    - 125
+    - 729
+    n_vols:
+    - 64
+    - 512
+  prism:
+    gls:
+      error: []
+    idw:
+      error: []
+    ls:
+      error: []
+    n_points: []
+    n_vols: []
+  tetra:
+    gls:
+      error:
+      - 1.7330532195089483e-16
+    idw:
+      error:
+      - 0.0050947349838933245
+    ls:
+      error:
+      - 1.1332698434347373e-16
+    n_points:
+    - 488
+    n_vols:
+    - 2003
+QUAD:
+  hexa:
+    gls:
+      error:
+      - 0.016840826742715212
+      - 0.006637855489419626
+    idw:
+      error:
+      - 0.016840826742715195
+      - 0.00663785548941956
+    ls:
+      error:
+      - 0.016840826742715195
+      - 0.00663785548941956
+    n_points:
+    - 125
+    - 729
+    n_vols:
+    - 64
+    - 512
+  prism:
+    gls:
+      error: []
+    idw:
+      error: []
+    ls:
+      error: []
+    n_points: []
+    n_vols: []
+  tetra:
+    gls:
+      error:
+      - 0.005543372264654051
+    idw:
+      error:
+      - 0.010265024234553352
+    ls:
+      error:
+      - 0.005750628070482095
+    n_points:
+    - 488
+    n_vols:
+    - 2003
+datetime: 2024-09-10 11:30

@@ -24,9 +24,6 @@ from colorama import Fore, Style
 from results import test_graphs
 from memory_profiler import memory_usage
 
-
-
-
 # Test parameters
 mesh_dir    = "./mesh"
 output_dir  = "./results/mesh/"
@@ -81,9 +78,9 @@ def monitor_memory(pid):
     except psutil.NoSuchProcess:
         return []
 
-class TestAccuracy:
+class TestPerformance:
     
-    def test_accuracy(self):
+    def test_performance(self):
         """
         Tests whether the interpolator is accurate.
         """
@@ -95,7 +92,7 @@ class TestAccuracy:
         if ".gitkeep" in files:
             files.remove(".gitkeep")
         
-        max_size = 2
+        max_size = 100
         # Remove "box" meshes
         new_files = []
         for file in files:
@@ -105,6 +102,9 @@ class TestAccuracy:
                 if os.path.getsize(os.path.join(mesh_dir, file)) < max_size * 1024 * 1024:
                     new_files.append(file)
         files = new_files
+
+        # sort files by size
+        files = sorted(files, key=lambda x: os.path.getsize(os.path.join(mesh_dir, x)))
         n_files = len(files)
         
         cases = [
@@ -113,20 +113,34 @@ class TestAccuracy:
 
         n_cases = len(cases)
 
-        def style(index, file, case, method, build_time, interpolate_time, memory):
+        def style(index, file, case, n_points, method, build_time, interpolate_time, memory, header=None):
+            
+            
+            if header:
+                index_s           = f"[{index.upper():<8}]"
+                file_s            = f"{file.upper():<10}"
+                case_s            = f"{case.upper():<5}"
+                n_points_s        = f"{n_points.upper():<7}"
+                method_s          = f"{method.upper():<6}"
+                build_time_s      = f"{build_time.upper():<7}"
+                interpolate_time_s= f"{interpolate_time.upper():<7}"
+                total_time_s      = f"{"TOTAL".upper():<7}"
+                memory_s          = f"{memory.upper():<5}"
+            else:
+                index_s             = f"{Fore.WHITE}[{index:<8}]{Style.RESET_ALL}"
+                file_s              = f"{Fore.LIGHTCYAN_EX}{file:<10}{Style.RESET_ALL}"
+                case_s              = f"{Fore.LIGHTBLUE_EX}{case:<5}{Style.RESET_ALL}"
+                n_points_s          = f"{Fore.LIGHTYELLOW_EX}{n_points:<7}{Style.RESET_ALL}"
+                method_s            = f"{Fore.LIGHTGREEN_EX}{method:<6}{Style.RESET_ALL}"
+                build_time_s        = f"{Fore.LIGHTMAGENTA_EX}{build_time:<6.3f}s{Style.RESET_ALL}"
+                interpolate_time_s  = f"{Fore.LIGHTYELLOW_EX}{interpolate_time:<6.3f}s{Style.RESET_ALL}"
+                total_time_s        = f"{Fore.LIGHTRED_EX}{build_time + interpolate_time:<5.3f} s{Style.RESET_ALL}"
+                memory_s            = f"{Fore.LIGHTWHITE_EX}{memory:.3f} MB{Style.RESET_ALL}"
+            
+            print(f"{index_s} {file_s} | {n_points_s} | {case_s} | {method_s} | {build_time_s} | {interpolate_time_s} | {total_time_s} | {memory_s}")
 
-            index_s             = f"{Fore.WHITE}[{index:<8}]{Style.RESET_ALL}"
-            file_s              = f"{Fore.LIGHTCYAN_EX}{file:<10}{Style.RESET_ALL}"
-            case_s              = f"{Fore.LIGHTBLUE_EX}{case:<5}{Style.RESET_ALL}"
-            method_s            = f"{Fore.LIGHTGREEN_EX}{method:<5}{Style.RESET_ALL}"
-            build_time_s        = f"{Fore.LIGHTMAGENTA_EX}{build_time:<5.3f}s{Style.RESET_ALL}"
-            interpolate_time_s  = f"{Fore.LIGHTYELLOW_EX}{interpolate_time:<5.3f}s{Style.RESET_ALL}"
-            total_time_s        = f"{Fore.LIGHTRED_EX}{build_time + interpolate_time:<5.3f}s{Style.RESET_ALL}"
-            memory_s            = f"{Fore.LIGHTWHITE_EX}{memory:.3f} MB{Style.RESET_ALL}"
-
-            print(f"{index_s} {file_s} | {case_s} | {method_s} | {build_time_s} | {interpolate_time_s} | {total_time_s} | {memory_s}")
-
-        print("\n===========================================================================")        
+        print("\n==========================================================================================")        
+        style("INDEX", "FILE", "CASE", "POINT", "METHOD", "BUILD", "INTER", "MEM", True)
 
         mesh_types = ["hexa", "tetra", "prism"]
         interpolator = ninpol.Interpolator(logging=False, build_edges=False)
@@ -141,11 +155,15 @@ class TestAccuracy:
                 } for mtype in mesh_types
             } for case in cases
         }
+
         results_dict["datetime"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
         for case in cases:
             for mtype in mesh_types:
-                results_dict[case.name][mtype]["build"] = []
+                results_dict[case.name][mtype]["build"]    = []
+                results_dict[case.name][mtype]["n_points"] = []
+                results_dict[case.name][mtype]["n_vols"]   = []
+
 
         for i, mesh_filename in enumerate(files):
             
@@ -211,14 +229,18 @@ class TestAccuracy:
                     index = i * n_cases * n_methods + j * n_methods + k
                     total = n_files * n_cases * n_methods
                     idx_str = str(index + 1) + '/' + str(total)
-                    style(idx_str, mesh_filename, case.name, method, build_time, interpolate_time, memory)
+                    style(idx_str, mesh_filename, case.name, case.mesh.points.shape[0], method, build_time, interpolate_time, memory)
 
-                   
+                    
                     results_dict[case.name][mtype][method]["time"].append(interpolate_time)
                     results_dict[case.name][mtype][method]["memory"].append(memory)
                     write_results(results_dict)              
-
-            print("===========================================================================")
+                
+                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
+                results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
+            print("==========================================================================================")
+            if i < n_files - 1:
+                style("INDEX", "FILE", "CASE", "POINT", "METHOD", "BUILD", "INTER", "MEM", True)
 
 def create_script(script_path, case_name, method, vtk_filename):
     # Write the Python script to the specified path
