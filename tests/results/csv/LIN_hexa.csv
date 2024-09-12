@@ -1,3 +1,0 @@
-case_name,n_points,gls_error,idw_error,ls_error,gls_Ru,idw_Ru,ls_Ru
-LIN,125,4.4196944018192787e-17,,0.0,,0.0,
-LIN,729,1.0885984078193188e-16,-1.533559023028898,0.0,nan,0.0,nan

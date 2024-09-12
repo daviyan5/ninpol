@@ -141,7 +141,7 @@ class TestAccuracy:
                     case.assign_mesh_properties(mesh_path)
                     pickle.dump(case, open(f"/tmp/{case.name}_{mesh_filename}.pkl", "wb"))
                 enable_print()
-                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
+                results_dict[case.name][mtype]["n_points"].append(len(case.internal_points))
                 results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
 
                 if j == 0:
@@ -176,7 +176,7 @@ class TestAccuracy:
                     index = i * n_cases * n_methods + j * n_methods + k
                     total = n_files * n_cases * n_methods
                     idx_str = str(index + 1) + '/' + str(total)
-                    style(idx_str, mesh_filename, case.mesh.points.shape[0], case.name, method, error)
+                    style(idx_str, mesh_filename, len(case.internal_points), case.name, method, error)
 
                     
                     results_dict[case.name][mtype]["methods"][method]["error"].append(float(error))

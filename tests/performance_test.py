@@ -124,7 +124,7 @@ class TestPerformance:
                 method_s          = f"{method.upper():<6}"
                 build_time_s      = f"{build_time.upper():<7}"
                 interpolate_time_s= f"{interpolate_time.upper():<7}"
-                total_time_s      = f"{"TOTAL".upper():<7}"
+                total_time_s      = f"{"TOTAL".upper():<9}"
                 memory_s          = f"{memory.upper():<5}"
             else:
                 index_s             = f"{Fore.WHITE}[{index:<8}]{Style.RESET_ALL}"
@@ -134,7 +134,7 @@ class TestPerformance:
                 method_s            = f"{Fore.LIGHTGREEN_EX}{method:<6}{Style.RESET_ALL}"
                 build_time_s        = f"{Fore.LIGHTMAGENTA_EX}{build_time:<6.3f}s{Style.RESET_ALL}"
                 interpolate_time_s  = f"{Fore.LIGHTYELLOW_EX}{interpolate_time:<6.3f}s{Style.RESET_ALL}"
-                total_time_s        = f"{Fore.LIGHTRED_EX}{build_time + interpolate_time:<5.3f} s{Style.RESET_ALL}"
+                total_time_s        = f"{Fore.LIGHTRED_EX}{build_time + interpolate_time:<7.3f} s{Style.RESET_ALL}"
                 memory_s            = f"{Fore.LIGHTWHITE_EX}{memory:.3f} MB{Style.RESET_ALL}"
             
             print(f"{index_s} {file_s} | {n_points_s} | {case_s} | {method_s} | {build_time_s} | {interpolate_time_s} | {total_time_s} | {memory_s}")
@@ -178,7 +178,7 @@ class TestPerformance:
                     case.assign_mesh_properties(mesh_path)
                     pickle.dump(case, open(f"/tmp/{case.name}_{mesh_filename}.pkl", "wb"))
                 enable_print()
-                results_dict[case.name][mtype]["n_points"].append(case.mesh.points.shape[0])
+                results_dict[case.name][mtype]["n_points"].append(len(case.internal_points))
                 results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
                 
                 n_methods = len(interpolator.supported_methods)
@@ -230,7 +230,7 @@ class TestPerformance:
                     index = i * n_cases * n_methods + j * n_methods + k
                     total = n_files * n_cases * n_methods
                     idx_str = str(index + 1) + '/' + str(total)
-                    style(idx_str, mesh_filename, case.name, case.mesh.points.shape[0], method, build_time, interpolate_time, memory)
+                    style(idx_str, mesh_filename, case.name, len(case.internal_points), method, build_time, interpolate_time, memory)
 
                     
                     results_dict[case.name][mtype]["methods"][method]["time"].append(interpolate_time)

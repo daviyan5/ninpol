@@ -147,6 +147,8 @@ class BaseCase():
         neumann_points = np.asarray(grid.inpofa)[neumann_faces].flatten()
         neumann_points = np.unique(neumann_points[neumann_points != -1])
 
+        self.internal_points = np.setdiff1d(np.arange(grid.n_points), dirichlet_points)
+        
 
         dirichlet_flag = np.zeros(grid.n_points)
         dirichlet_flag[dirichlet_points] = 1
@@ -187,7 +189,8 @@ class BaseCase():
         values      = weights.dot(self.vols_solution)
         values[self.dirichlet_points] = self.point_solution[self.dirichlet_points]
 
-        error       = l2norm_relative(values, self.point_solution)
+        internal_nodes = np.setdiff1d(np.arange(len(values)), self.dirichlet_points)
+        error       = l2norm_relative(values[internal_nodes], self.point_solution[internal_nodes])
         error_array = l2norm_array(values, self.point_solution)
         
         return error, error_array
