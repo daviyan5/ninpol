@@ -91,8 +91,9 @@ cdef class GLSInterpolation:
 
             timespec ts
 
-        self.first_point = True
         for point in points:
+            if point == 52:
+                self.first_point = True
             if grid.boundary_points[point] and not neumann_point[point]: 
                 continue
             clock_gettime(CLOCK_REALTIME, &ts)
@@ -141,7 +142,7 @@ cdef class GLSInterpolation:
             end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
             solve_time += end_time - start_time
 
-            #self.first_point = False
+            self.first_point = False
         
         if self.logging:
             self.logger.log(f"GLS: build {build_time:.2f} s, Solve {solve_time:.2f} s, DGELS {self.only_dgels:.2f}", "INFO")
