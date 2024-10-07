@@ -207,9 +207,6 @@ cdef class GLSInterpolation:
             end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
             build_time += end_time - start_time
 
-            if self.logging and self.first_point:
-                self.logger.json("first_point", self.log_dict)
-
             clock_gettime(CLOCK_REALTIME, &ts)
             
             start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
@@ -220,6 +217,9 @@ cdef class GLSInterpolation:
                           lda, ldb,
                           work, lwork,
                           weights, neumann_ws)
+            
+            if self.logging and self.first_point:
+                self.logger.json("first_point", self.log_dict)
 
             clock_gettime(CLOCK_REALTIME, &ts)
             end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
@@ -505,7 +505,6 @@ cdef class GLSInterpolation:
         if info:
             if self.logging:
                 self.logger.log(f"Failed to solve LS system in point {point}. Info: {info}", "ERROR")
-            raise ValueError("Failed to solve LS system")
         
         self.only_dgels += end_time - start_time
         cdef:
@@ -532,8 +531,8 @@ cdef class GLSInterpolation:
                 "lwork": lwork,
                 "M_size": M_size,
                 "w_total": w_total,
-                "A": Mi,
-                "B": Ni,
+                "A": A,
+                "B": B,
             }
             for key in temp_dict:
                 try:
