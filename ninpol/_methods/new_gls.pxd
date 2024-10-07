@@ -15,12 +15,12 @@ from .._interpolator.ninpol_defines cimport *
 
 cdef class GLSInterpolation:
 
+    cdef readonly int first_point
     cdef readonly int logging
     cdef readonly Logger logger
     cdef dict log_dict
-    cdef readonly int first_point
 
-    cdef double only_dgels
+    cdef readonly double only_dgels
 
     cdef void prepare(self, Grid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
@@ -36,28 +36,40 @@ cdef class GLSInterpolation:
                   DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
 
     cdef view.array array(self, tuple shape, str t)
-    cdef DTYPE_F_t[::1] cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b)
+    cdef void cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b, DTYPE_F_t[::1] c)
     cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a)
     
     
     cdef void build_ks_sv_arrays(self, Grid grid, int point, 
                                  DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb, 
-                                 const int n_bface)
+                                 const int n_elem, const int n_face, const int n_bface)
 
     cdef void build_ls_matrices(self, Grid grid, int point, 
                                 const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
-                                const int n_bface, DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
-                                DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni)
+                                const int n_elem, const int n_face, const int n_bface, 
+                                DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
+                                DTYPE_F_t[::1] xv, DTYPE_F_t[:, ::1] xK, DTYPE_F_t[:, ::1] dKv,
+                                DTYPE_F_t[:, ::1] xS, DTYPE_F_t[:, ::1] N_sj, DTYPE_I_t[:, ::1] Ks_Sv, DTYPE_F_t[::1] eta_j,
+                                DTYPE_F_t[:, ::1] T_sj1, DTYPE_F_t[:, ::1] T_sj2, DTYPE_F_t[::1] tau_j2, DTYPE_F_t[:, ::1] tau_tsj2,
+                                DTYPE_F_t[:, ::1] nL1, DTYPE_F_t[:, ::1] nL2, DTYPE_I_t[::1] Ij1, DTYPE_I_t[::1] Ij2, DTYPE_F_t[::1] temp_cross,
+                                DTYPE_I_t[::1] idx1, DTYPE_I_t[::1] idx2, DTYPE_I_t[::1] idx3,
+                                DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni)
     
     cdef void _set_mi(self, 
                      const int row, const int col, 
-                     const DTYPE_F_t[::1] v, DTYPE_F_t[:, ::1] Mi, int k)
+                     const DTYPE_F_t[::1] v, DTYPE_F_t[::1, :] Mi, int k)
 
     cdef void set_neumann_rows(self, Grid grid,
                                int point, const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
-                               const int n_bface, DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
-                               DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni)
+                               const int n_elem, const int n_face, const int n_bface, 
+                               DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
+                               DTYPE_I_t[::1] neumann_rows, DTYPE_I_t[:, ::1] Ks_Svb, 
+                               DTYPE_F_t[:, ::1] nL, DTYPE_I_t[::1] Ik,
+                               DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni)
 
     cdef void solve_ls(self, int point, int is_neumann,
-                       DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni, 
+                       DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni, 
+                       int m, int n, int nrhs,
+                       int lda, int ldb,
+                       DTYPE_F_t[::1] work, int lwork,
                        DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)

@@ -19,7 +19,7 @@ cdef class LSInterpolation:
 
 
     cdef void prepare(self, Grid grid, 
-                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data,
+                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
                       const DTYPE_I_t[::1] target_points,
@@ -48,7 +48,7 @@ cdef class LSInterpolation:
 
             int n_target = points.shape[0]
 
-            int use_threads = min(8, np.ceil(n_target / 800))
+            int use_threads = min(16, np.ceil(n_target / 400))
 
         omp_set_num_threads(use_threads)
         for idx in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):   

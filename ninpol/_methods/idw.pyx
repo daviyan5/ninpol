@@ -12,7 +12,7 @@ cdef class IDWInterpolation:
         self.log_dict = {}
 
     cdef void prepare(self, Grid grid, 
-                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data,
+                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
                       const DTYPE_I_t[::1] target_points,
@@ -52,9 +52,9 @@ cdef class IDWInterpolation:
             
             float machine_epsilon = 10 ** int(np.log10(np.finfo(np.float64).eps))
         
-        cdef int use_threads = min(8, np.ceil(n_target / 800))
+        cdef int use_threads = min(16, np.ceil(n_target / 400))
         omp_set_num_threads(use_threads)
-        for dest_idx in prange(n_target, nogil=True, schedule='static', num_threads=8 if use_threads else 1):
+        for dest_idx in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
             point = target_points[dest_idx]
             zero_found = False
             total_distance = 0

@@ -49,7 +49,8 @@ cdef class Interpolator:
 
         self.variable_to_index = {
             "points": {},
-            "cells": {}
+            "cells": {},
+            "faces": {}
         }
 
         self.types_per_dimension = {
@@ -60,8 +61,12 @@ cdef class Interpolator:
         }
         self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+        
         self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
+        self.faces_data = np.zeros((1, 1), dtype=DTYPE_F)
+        self.faces_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
         self.logging = logging
         self.logger  = Logger(name)
@@ -328,6 +333,51 @@ cdef class Interpolator:
     cdef void load_point_data(self):
         self.load_data(self.mesh_obj.point_data, "points")
 
+    cpdef void load_face_data(self, dict data_dict, DTYPE_I_t[:, ::1] face_connectivity = np.array([[]], dtype=int)):
+        """
+        Since meshio can't properly provide face data in all cases, this function shall be used
+        to load face data from a dictionary. The face_connectivity array can be provided if the user
+        believes the connectivity (inpofa) from self.grid is different from it's own. 
+        
+        Data_dict should be a dictionary with the following structure:
+        {
+            "variable_name": np.array([data])
+        }
+
+        Vector data is not supported yet.
+        """
+        
+        # If face_connectivity is not empty, let's create a mapping from the face_connectivity to the grid connectivity
+        cdef:
+            cnp.ndarray[int, ndim=2, mode="c"] A = face_connectivity
+            cnp.ndarray[int, ndim=2, mode="c"] B = self.grid.inpofa
+            DTYPE_I_t[::1] face_to_grid = np.arange(self.grid.n_faces, dtype=DTYPE_I)
+            
+        if len(face_connectivity) > 0:
+            # Create views of A and B where each row is represented as a single item
+            A_view = A.view([('', A.dtype)] * A.shape[1]).ravel()
+            B_view = B.view([('', B.dtype)] * B.shape[1]).ravel()
+            
+            # Sort B_view and get the sorted indices
+            idx_B_sorted = np.argsort(B_view)
+            B_view_sorted = B_view[idx_B_sorted]
+            
+            # Use searchsorted to find the indices of A_view in the sorted B_view
+            idx_in_B_sorted = np.searchsorted(B_view_sorted, A_view)
+            
+            # Map the indices back to the original indices in B
+            face_to_grid = idx_B_sorted[idx_in_B_sorted]
+        
+        cdef:
+            int i
+            str variable
+
+        self.faces_data = np.zeros((len(data_dict), self.grid.n_faces), dtype=DTYPE_F)
+        for i, variable in enumerate(data_dict):
+            self.variable_to_index["faces"][variable] = i
+            self.faces_data_dimensions[i] = data_dict[variable].shape[1]
+            self.faces_data[i] = data_dict[variable][face_to_grid].astype(DTYPE_F)
+
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability):
         cdef:
             int nvols = len(permeability)
@@ -375,7 +425,7 @@ cdef class Interpolator:
                 raise ValueError(f"Variable '{variable}' not found in points data.")
             data_index = self.variable_to_index["points"][variable]
             return np.asarray(self.points_data[data_index])[index]
-
+    
     cpdef tuple interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
         
         if not self.is_grid_initialized:
@@ -415,7 +465,7 @@ cdef class Interpolator:
             int n_elems     = self.grid.n_elems
             int data_size   = self.grid.esup.shape[0]
 
-            int use_threads = min(8, np.ceil(n_target / 800))
+            int use_threads = min(16, np.ceil(n_target / 400))
 
             
             
@@ -490,7 +540,7 @@ cdef class Interpolator:
 
         self.supported_methods[method](
             self.grid, 
-            self.cells_data, self.points_data, 
+            self.cells_data, self.points_data, self.faces_data,
             self.variable_to_index, 
             variable,
             target_points, 

@@ -17,7 +17,7 @@ cdef class IDWInterpolation:
     cdef dict log_dict
 
     cdef void prepare(self, Grid grid, 
-                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data,
+                      const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
                       const DTYPE_I_t[::1] target_points,

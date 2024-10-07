@@ -41,6 +41,9 @@ cdef class Interpolator:
 
     cdef readonly DTYPE_F_t[:, ::1] points_data
     cdef readonly DTYPE_I_t[::1] points_data_dimensions
+
+    cdef readonly DTYPE_F_t[:, ::1] faces_data
+    cdef readonly DTYPE_I_t[::1] faces_data_dimensions
     
     cdef readonly int logging
     cdef readonly Logger logger
@@ -54,7 +57,7 @@ cdef class Interpolator:
 
     cdef void load_cell_data(self)
     cdef void load_point_data(self)
-
+    cpdef void load_face_data(self, dict data_dict, DTYPE_I_t[:, ::1] face_connectivity = *)
     cdef void load_data(self, dict data_dict, str data_type)
 
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability)

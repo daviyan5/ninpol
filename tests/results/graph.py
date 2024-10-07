@@ -126,7 +126,7 @@ def build_graph(build_times, n_points, mesh_types):
                 linewidth=2.0, markersize=5)
         # Plot, in traced lines ---, a linear interpolation of build_time for n_points = 0 and n_points = 1e6
         start_p = 0
-        end_p   = 2e6
+        end_p   = 2.1e6
 
         a = (build_times[mtype][-1] - build_times[mtype][0]) / (n_points[mtype][-1] - n_points[mtype][0])
         
@@ -135,9 +135,9 @@ def build_graph(build_times, n_points, mesh_types):
         ax.plot([start_p, end_p], [a * start_p + b, a * end_p + b],
                 color=mcolors[mtype], linestyle='--', linewidth=2.0)
 
-    ax.set_xlabel("Number of points")
-    ax.set_ylabel("Build Time (s)")
-    ax.set_title("Build Times for Different Mesh Types", fontsize=14)
+    ax.set_xlabel("Número de Pontos")
+    ax.set_ylabel("Tempo de Montagem (s)")
+    ax.set_title("Tempo de Montagem para Diferentes Tipos de Malha", fontsize=14)
 
     ax.minorticks_on()
     ax.grid(which='both', linestyle='--', linewidth=0.5)
@@ -147,53 +147,60 @@ def build_graph(build_times, n_points, mesh_types):
     plt.tight_layout()
     plt.savefig(os.path.join(graphs_folder, "build_times.png"), dpi=300)
 
-def performance_graph(case, mtype, n_points, times_by_method, memory_by_method):
-    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+def performance_graph_multi(case, n_points, times_by_method, memory_by_method, mesh_types):
+    # Create figure for execution time (3 subplots, one for each mesh type)
+    fig_time, ax_time = plt.subplots(1, 3, figsize=(18, 6))
+    fig_time.suptitle(f"Tempo de Execução para {case}", fontsize=16)
+
+    # Create figure for memory (3 subplots, one for each mesh type)
+    fig_memory, ax_memory = plt.subplots(1, 3, figsize=(18, 6))
+    fig_memory.suptitle(f"Memória Máxima Alocada para {case}", fontsize=16)
 
     markers = ['o', 's', 'D']  # Different marker styles for different methods
-    ax[0].set_title(f"Time Performance", fontsize=14)
-    ax[1].set_title(f"Memory Usage", fontsize=14)
 
-    # Plot time performance with markers
-    for i, (method, times) in enumerate(times_by_method.items()):
-        ax[0].plot(n_points[mtype], times, 
-                   label=method, color=colors[method], marker=markers[i % len(markers)], 
-                   linestyle=linestyles[method],
-                   linewidth=2.0, markersize=8)
-    ax[0].set_xlabel("Number of points")
-    ax[0].set_ylabel("Time (s)")
-    ax[0].set_yscale("log")
-    ax[0].set_xscale("log")
-    ax[0].minorticks_on()
-    ax[0].grid(which='both', linestyle='--', linewidth=0.5)
+    # Loop over each mesh type to create separate subplots
+    for i, mtype in enumerate(mesh_types):
+        ax_time[i].set_title(f"Malha: {mtype}", fontsize=14)
+        ax_memory[i].set_title(f"Malha: {mtype}", fontsize=14)
 
-    # Plot memory performance with markers
-    for i, (method, memory) in enumerate(memory_by_method.items()):
-        ax[1].plot(n_points[mtype], memory, 
-                   label=method, color=colors[method], 
-                   linestyle=linestyles[method],
-                   marker=markers[i % len(markers)], 
-                   linewidth=2.0, markersize=8)
-    ax[1].set_xlabel("Number of points")
-    ax[1].set_ylabel("Memory Usage (MB)")
+        # Plot execution time with markers on the corresponding subplot
+        for j, (method, times) in enumerate(times_by_method[mtype].items()):
+            ax_time[i].plot(n_points[mtype], times, 
+                            label=method, color=colors[method], marker=markers[j % len(markers)], 
+                            linestyle=linestyles[method],
+                            linewidth=2.0, markersize=8)
+        ax_time[i].set_xlabel("Número de Pontos")
+        ax_time[i].set_ylabel("Tempo de Execução (s)")
+        ax_time[i].set_yscale("log")
+        ax_time[i].set_xscale("log")
+        ax_time[i].minorticks_on()
+        ax_time[i].grid(which='both', linestyle='--', linewidth=0.5)
 
-    # Move the y-axis ticks to the right side for ax[1]
-    ax[1].yaxis.tick_right()  # Set the y-ticks to appear on the right side
-    ax[1].yaxis.set_label_position("right")  # Move the label to the right as well
-    
-    # Enable minor ticks
-    ax[1].minorticks_on()
-    ax[1].grid(which='both', linestyle='--', linewidth=0.5)
+        # Plot memory performance with markers on the corresponding subplot
+        for j, (method, memory) in enumerate(memory_by_method[mtype].items()):
+            ax_memory[i].plot(n_points[mtype], memory, 
+                              label=method, color=colors[method], 
+                              linestyle=linestyles[method],
+                              marker=markers[j % len(markers)], 
+                              linewidth=2.0, markersize=8)
+        ax_memory[i].set_xlabel("Número de Pontos")
+        ax_memory[i].set_ylabel("Memória Alocada (MB)")
+        ax_memory[i].minorticks_on()
+        ax_memory[i].grid(which='both', linestyle='--', linewidth=0.5)
 
-    # Add grid and legends
-    ax[0].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
-    ax[1].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
+        # Add legends to each subplot
+        ax_time[i].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
+        ax_memory[i].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
 
-    # Adjust the space between the two subplots
-    plt.subplots_adjust(wspace=0.5, hspace=0.3)
-    
+    # Adjust layout for both figures
+    fig_time.tight_layout()
+    fig_memory.tight_layout()
     plt.tight_layout()
-    plt.savefig(os.path.join(graphs_folder, f"per{case}_{mtype}.png"), dpi=300)
+
+    # Save the figures to disk
+    fig_time.savefig(os.path.join(graphs_folder, f"time_{case}.png"), dpi=300)
+    fig_memory.savefig(os.path.join(graphs_folder, f"memory_{case}.png"), dpi=300)
+
 
 def accuracy_csv(case, mtype, n_points, accuracy_by_method, methods):
     with open(f"{csv_folder}/{case}_{mtype}.csv", "w") as file:
@@ -205,8 +212,11 @@ def accuracy_csv(case, mtype, n_points, accuracy_by_method, methods):
         for i in range(len(n_points[mtype])):
             row = [case, n_points[mtype][i]]
             for method in methods:
-                row.append(accuracy_by_method[method]["l2"][i])
-                row.append(accuracy_by_method[method]["Ru"][i] if accuracy_by_method[method]["Ru"][i] is not None else "--")
+                row.append(np.round(accuracy_by_method[method]["l2"][i], 2))
+                Ru = accuracy_by_method[method]["Ru"][i] if accuracy_by_method[method]["Ru"][i] is not None else "--"
+                if Ru != "--":
+                    Ru = np.round(Ru, 2)
+                row.append(Ru)
             writer.writerow(row)
 
 def mpfa_csv(case, mpfa_n_points, mpfa_ninpol_times, mpfa_py_times, accuracy_per_method, methods):
@@ -218,77 +228,65 @@ def mpfa_csv(case, mpfa_n_points, mpfa_ninpol_times, mpfa_py_times, accuracy_per
             row.append(method + "_speedup")
             row.append(method + "_Ru")
         writer.writerow(row)
-        last_error = None
+        last_error = {method: None for method in mpfa_ninpol_times}
+
         for i in range(len(mpfa_n_points)):
             row = [mpfa_n_points[i]]
             for method1, method2 in zip(mpfa_ninpol_times, mpfa_py_times):
                 speedup = calc_speedup(mpfa_ninpol_times[method1], mpfa_py_times[method2])
-                row.append(speedup[i])
-                if last_error == None:
+                row.append(np.round(speedup[i], 2))
+                if last_error[method1] == None:
                     row.append("--")
-                    last_error = accuracy_per_method[method1][i]
+                    last_error[method1] = accuracy_per_method[method1][i]
                 else:
-                    Ru = calc_Ru([last_error, accuracy_per_method[method1][i]], [mpfa_n_points[i - 1], mpfa_n_points[i]])[1]
-                    row.append(Ru)
-                    last_error = accuracy_per_method[method1][i]
+                    Ru = calc_Ru([last_error[method1], accuracy_per_method[method1][i]], [mpfa_n_points[i - 1], mpfa_n_points[i]])[1]
+                    row.append(np.round(Ru, 2))
+                    last_error[method1] = accuracy_per_method[method1][i]
             writer.writerow(row)
         
-def plot_accuracy(case, mtype, n_points, accuracy_by_method, methods):
-    fig, ax = plt.subplots(1, 2, figsize=(14, 6))
+def plot_accuracy_multi(case, n_points, accuracy_by_method, methods, mesh_types):
+    fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+    fig.suptitle(f"Acurácia (Norma L2) para {case}", fontsize=16)
 
     markers = ['o', 's', 'D']  # Different marker styles for different methods
-    ax[0].set_title(f"Accuracy (L2 Norm)", fontsize=14)
-    ax[1].set_title(f"Accuracy (Ru)", fontsize=14)
 
-    # Plot time performance with markers
-    minn  = min(n_points[mtype])
-    minerr = min([min(accuracy_by_method[method]["l2"]) for method in methods])
-    ax[0].plot([minn, 10 * minn], [minerr, minerr * np.exp((-2 / 3) * np.log(10))], 
-                color='r', label="O(n²)")
-    for i, (method, errors) in enumerate(accuracy_by_method.items()):
-        ax[0].plot(n_points[mtype], errors["l2"], 
-                   label=method, color=colors[method], 
-                   linestyle=linestyles[method],
-                   marker=markers[i % len(markers)], 
-                   linewidth=2.0, markersize=8)
+    # Loop over each mesh type to create separate subplots
+    for i, mtype in enumerate(mesh_types):
+        ax[i].set_title(f"Malha: {mtype}", fontsize=14)
+
+        # Plot L2 error performance with markers
+        minn  = min(n_points[mtype])
+        minerr = min([min(accuracy_by_method[mtype][method]["l2"]) for method in methods])
+        if case != "LIN":
+            ax[i].plot([minn, 10 * minn], [minerr, minerr * np.exp((-2 / 3) * np.log(10))], 
+                        color='r', label="O(n²)")
+
+        for j, (method, errors) in enumerate(accuracy_by_method[mtype].items()):
+            error = np.array(errors["l2"])
+            error[error == 0] = 1e-16 
+            ax[i].plot(n_points[mtype], error, 
+                       label=method, color=colors[method], 
+                       linestyle=linestyles[method],
+                       marker=markers[j % len(markers)], 
+                       linewidth=2.0, markersize=8)
         
+        # If case == "LIN", set the max and min of the y-axis to 0 and 1
         
-
-    ax[0].set_xlabel("Number of points")
-    ax[0].set_ylabel("L2 Norm")
-    ax[0].set_yscale("log")
-    ax[0].set_xscale("log")
-    ax[0].minorticks_on()
-    ax[0].grid(which='both', linestyle='--', linewidth=0.5)
-    
-    # Plot memory performance with markers
-    for i, (method, errors) in enumerate(accuracy_by_method.items()):
-        ax[1].plot(n_points[mtype], errors["Ru"], 
-                   label=method, color=colors[method], 
-                   linestyle=linestyles[method],
-                   marker=markers[i % len(markers)], 
-                   linewidth=2.0, markersize=8)
+            
         
-    ax[1].set_xlabel("Number of points")
-    ax[1].set_ylabel("Ru")
-
-    # Move the y-axis ticks to the right side for ax[1]
-    ax[1].yaxis.tick_right()  # Set the y-ticks to appear on the right side
-    ax[1].yaxis.set_label_position("right")  # Move the label to the right as well
-    
-    # Enable minor ticks
-    ax[1].minorticks_on()
-    ax[1].grid(which='both', linestyle='--', linewidth=0.5)
-
-    # Add grid and legends
-    ax[0].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
-    ax[1].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
-
-    # Adjust the space between the two subplots
-    plt.subplots_adjust(wspace=0.5, hspace=0.3)
+        ax[i].set_xlabel("Número de Pontos")
+        ax[i].set_ylabel("Norma L2")
+        ax[i].set_yscale("log")
+        ax[i].set_xscale("log")
+        ax[i].minorticks_on()
+        ax[i].grid(which='both', linestyle='--', linewidth=0.5)
+        if case == "LIN":
+            ax[i].set_ylim(1e-18, 100)
+        # Add legends to each subplot
+        ax[i].legend(loc='upper left', frameon=True, shadow=True, fontsize='large')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(graphs_folder, f"acc{case}_{mtype}.png"), dpi=300)
+    plt.savefig(os.path.join(graphs_folder, f"acc_{case}.png"), dpi=300)
 
 def graph():
     # ----- Build graph -----
@@ -301,38 +299,29 @@ def graph():
     build_graph(build_times, n_points, mesh_types)
 
     for case in cases:
-        for mtype in mesh_types:
-            # ----- Time x N / Memory x N graphs -----
-            if n_points[mtype] == []:
-                continue
-            times_by_method  = {method: performance_data[case][mtype]["methods"][method]["time"] for method in methods}
-            memory_by_method = {method: performance_data[case][mtype]["methods"][method]["memory"] for method in methods}
-            performance_graph(case, mtype, n_points, times_by_method, memory_by_method)
-            
+        times_by_method = {mtype: {method: performance_data[case][mtype]["methods"][method]["time"] for method in methods} for mtype in mesh_types}
+        memory_by_method = {mtype: {method: performance_data[case][mtype]["methods"][method]["memory"] for method in methods} for mtype in mesh_types}
+        performance_graph_multi(case, n_points, times_by_method, memory_by_method, mesh_types)
+
         if case != "LIN":
             mtype = "tetra"
             accuracy_by_method = {method: {"l2": accuracy_data[case][mtype]["methods"][method]["error"] } for method in methods}
             for method in methods:
                 accuracy_by_method[method]["Ru"] = calc_Ru(accuracy_by_method[method]["l2"], n_points[mtype])
-        
-            accuracy_csv(case, mtype, n_points, accuracy_by_method, methods)
-        
-        mtype = "tetra"
-        accuracy_by_method = {method: {"l2": accuracy_data[case][mtype]["methods"][method]["error"] } for method in methods}
-        for method in methods:
-            accuracy_by_method[method]["Ru"] = calc_Ru(accuracy_by_method[method]["l2"], n_points[mtype])
-        plot_accuracy(case, mtype, n_points, accuracy_by_method, methods)
 
-    mpfa_cases    = list(mpfa_data.keys())
-    mpfa_methods  = [method for method in mpfa_data[mpfa_cases[0]]]
+            accuracy_csv(case, mtype, n_points, accuracy_by_method, methods)
+
+        accuracy_by_method = {mtype: {method: {"l2": accuracy_data[case][mtype]["methods"][method]["error"] } for method in methods} for mtype in mesh_types}
+        plot_accuracy_multi(case, n_points, accuracy_by_method, methods, mesh_types)
+
+    mpfa_cases = list(mpfa_data.keys())
+    mpfa_methods = [method for method in mpfa_data[mpfa_cases[0]]]
     mpfa_n_points = {case: mpfa_data[case][mpfa_methods[0]]["n_points"] for case in mpfa_cases}
     mpfa_ninpol_times = {case: {method: mpfa_data[case][method]["times"] for method in mpfa_methods if "ninpol" in method} for case in mpfa_cases}
-    mpfa_py_times     = {case: {method: mpfa_data[case][method]["times"] for method in mpfa_methods if "py" in method} for case in mpfa_cases}
+    mpfa_py_times = {case: {method: mpfa_data[case][method]["times"] for method in mpfa_methods if "py" in method} for case in mpfa_cases}
     mpfa_accuracy_per_method = {case: {method: mpfa_data[case][method]["accuracy"] for method in mpfa_methods if "ninpol" in method} for case in mpfa_cases}
     for case in mpfa_cases:
         mpfa_csv(case, mpfa_n_points[case], mpfa_ninpol_times[case], mpfa_py_times[case], mpfa_accuracy_per_method[case], mpfa_methods)
-
-
 
 if __name__ == "__main__":
     graph()

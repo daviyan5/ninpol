@@ -436,11 +436,11 @@ cdef class Grid:
         
         cdef:
             int elem
-            int num_threads = min(8, np.ceil(self.n_faces / 800))
+            int use_threads = min(16, np.ceil(self.n_faces / 400))
 
         # Make sure that the first element is the one that defined self.inpofa
-        omp_set_num_threads(num_threads)
-        for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=num_threads):
+        omp_set_num_threads(use_threads)
+        for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
             elem = self.esuf[self.esuf_ptr[face]]
             if elem != -1:
                 elem_type = self.element_types[elem]
@@ -453,8 +453,8 @@ cdef class Grid:
         self.boundary_faces = np.zeros(self.n_faces, dtype=DTYPE_I)
         self.boundary_points = np.zeros(self.n_points, dtype=DTYPE_I)
         
-        omp_set_num_threads(num_threads)
-        for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=num_threads):
+        omp_set_num_threads(use_threads)
+        for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
             if self.esuf_ptr[i + 1] - self.esuf_ptr[i] == 1:
                 self.boundary_faces[i] = True
                 for j in self.inpofa[i]:
@@ -480,7 +480,7 @@ cdef class Grid:
             int jelem_face_point
             int is_equal 
 
-            int use_threads = min(8, np.ceil(self.n_elems / 800))
+            int use_threads = min(16, np.ceil(self.n_elems / 400))
 
             
         self.esuel = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
@@ -708,7 +708,7 @@ cdef class Grid:
             float machine_epsilon = 10 ** int(np.log10(np.finfo(DTYPE_F).eps))
 
 
-        cdef int use_threads = min(8, np.ceil(self.n_elems / 800))
+        cdef int use_threads = min(16, np.ceil(self.n_elems / 400))
         omp_set_num_threads(use_threads)
         for i in prange(self.n_elems, nogil=True, schedule='static', num_threads=use_threads):
             elem_type = self.element_types[i]
@@ -748,7 +748,7 @@ cdef class Grid:
             float normalx, normaly, normalz
 
             float norm = 0.0
-            int use_threads = min(8, np.ceil(self.n_faces / 800))
+            int use_threads = min(16, np.ceil(self.n_faces / 400))
 
         omp_set_num_threads(use_threads)
         for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):

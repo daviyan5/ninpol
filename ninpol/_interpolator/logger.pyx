@@ -45,9 +45,9 @@ cdef class Logger:
 
     cdef void log(self, str message, str type):
         cdef:
-            str full_str = f"[{type:<5}] ({datetime.now().strftime('%H:%M:%S'):<8}) {message}"
+            str full_str = f"[{type:<5}] ({datetime.now().strftime('%H:%M:%S'):<8}) {message}\n"
         if self.terminal:
-            print(full_str)
+            print(full_str, end="")
         else:
             with open(self.filename, 'a') as f:
                 f.write(full_str)
