@@ -2,8 +2,11 @@ import numpy as np
 from scipy.__config__ import CONFIG
 import os
 
+from cython.parallel import prange
+from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from ..utils.robin_hood cimport unordered_map
 from libc.math cimport sqrt
+from libc.stdlib cimport malloc, free
 
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 
@@ -69,8 +72,13 @@ cdef class GLSInterpolation:
                   DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
     
         cdef:
+            int i, j, k
             int point
             int n_points = points.shape[0]
+
+        cdef:
+            int num_threads = 16
+            int thread_id
 
         cdef:
             int n_elem
@@ -95,52 +103,52 @@ cdef class GLSInterpolation:
             int ldb = max(1, m)
         
         cdef:
-            DTYPE_I_t[::1] KSetv = np.zeros(N_ELEM_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[::1] Sv    = np.zeros(N_FACE_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[::1] Svb   = np.zeros(N_BFACE_MAX, dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] KSetv = np.zeros((num_threads, N_ELEM_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] Sv    = np.zeros((num_threads, N_FACE_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] Svb   = np.zeros((num_threads, N_BFACE_MAX), dtype=DTYPE_I)
 
         cdef:
-            DTYPE_F_t[::1, :] Mi = view.array(shape=(m, n), itemsize=sizeof(double), format="d", mode='fortran')
-            DTYPE_F_t[::1, :] Ni = view.array(shape=(m, nrhs), itemsize=sizeof(double), format="d", mode='fortran')
+            DTYPE_F_t[:, :, ::1] Mi = np.zeros((num_threads, m, n), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] Ni = np.zeros((num_threads, m, nrhs), dtype=DTYPE_F)
 
         cdef:
-            DTYPE_F_t[:, ::1] xS        = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[::1] xv           = np.zeros((3,           ), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] xK        = np.zeros((N_ELEM_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] dKv       = np.zeros((N_ELEM_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] N_sj      = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_I_t[:, ::1] Ks_Sv     = np.zeros((N_FACE_MAX, 2), dtype=DTYPE_I)
-            DTYPE_F_t[::1] eta_j        = np.zeros((N_FACE_MAX,  ), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] T_sj1     = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] T_sj2     = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[::1] tau_j2       = np.zeros((N_FACE_MAX,  ), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] tau_tsj2  = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] nL1       = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[:, ::1] nL2       = np.zeros((N_FACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_F_t[::1] temp_cross   = np.zeros((3,           ), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] xS        = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, ::1] xv           = np.zeros((num_threads, 3,           ), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] xK        = np.zeros((num_threads, N_ELEM_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] dKv       = np.zeros((num_threads, N_ELEM_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] N_sj      = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_I_t[:, :, ::1] Ks_Sv     = np.zeros((num_threads, N_FACE_MAX, 2), dtype=DTYPE_I)
+            DTYPE_F_t[:, ::1] eta_j        = np.zeros((num_threads, N_FACE_MAX,  ), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] T_sj1     = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] T_sj2     = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, ::1] tau_j2       = np.zeros((num_threads, N_FACE_MAX,  ), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] tau_tsj2  = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] nL1       = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, :, ::1] nL2       = np.zeros((num_threads, N_FACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_F_t[:, ::1] temp_cross   = np.zeros((num_threads, 3,           ), dtype=DTYPE_F)
 
         cdef:
-            DTYPE_I_t[::1] Ij1  = np.zeros(N_FACE_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[::1] Ij2  = np.zeros(N_FACE_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[::1] idx1 = np.zeros(N_FACE_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[::1] idx2 = np.zeros(N_FACE_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[::1] idx3 = np.zeros(N_FACE_MAX, dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] Ij1  = np.zeros((num_threads, N_FACE_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] Ij2  = np.zeros((num_threads, N_FACE_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] idx1 = np.zeros((num_threads, N_FACE_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] idx2 = np.zeros((num_threads, N_FACE_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] idx3 = np.zeros((num_threads, N_FACE_MAX), dtype=DTYPE_I)
 
         cdef:
-            DTYPE_I_t[::1] neumann_rows = np.zeros(N_BFACE_MAX, dtype=DTYPE_I)
-            DTYPE_I_t[:, ::1] Ks_Svb    = np.zeros((N_BFACE_MAX, 1), dtype=DTYPE_I)
-            DTYPE_F_t[:, ::1] nL        = np.zeros((N_BFACE_MAX, 3), dtype=DTYPE_F)
-            DTYPE_I_t[::1] Ik           = np.zeros(N_BFACE_MAX, dtype=DTYPE_I)
+            DTYPE_I_t[:, ::1] neumann_rows = np.zeros((num_threads, N_BFACE_MAX), dtype=DTYPE_I)
+            DTYPE_I_t[:, :, ::1] Ks_Svb    = np.zeros((num_threads, N_BFACE_MAX, 1), dtype=DTYPE_I)
+            DTYPE_F_t[:, :, ::1] nL        = np.zeros((num_threads, N_BFACE_MAX, 3), dtype=DTYPE_F)
+            DTYPE_I_t[:, ::1] Ik           = np.zeros((num_threads, N_BFACE_MAX), dtype=DTYPE_I)
 
         cdef:
-            double[::1] work = np.zeros(1, dtype=DTYPE_F)
+            double[:, ::1] work = np.zeros((1, 1), dtype=DTYPE_F)
             
             int lwork = -1
             int info = 0
 
-        lapack.dgels('N', &m, &n, &nrhs, &Mi[0, 0], &lda, &Ni[0, 0], &ldb, &work[0], &lwork, &info)
-        lwork = int(work[0])
-        work = np.zeros(lwork, dtype=DTYPE_F)
+        lapack.dgels('N', &m, &n, &nrhs, &Mi[0, 0, 0], &lda, &Ni[0, 0, 0], &ldb, &work[0, 0], &lwork, &info)
+        lwork = int(work[0, 0])
+        work = np.zeros((num_threads, lwork), dtype=DTYPE_F)
 
         cdef:
             double start_time = 0., end_time = 0.
@@ -150,9 +158,13 @@ cdef class GLSInterpolation:
 
         self.only_dgels = 0.0
         self.first_point = False
-        for point in points:
-            if point == 52:
-                self.first_point = True
+
+        
+
+        omp_set_num_threads(num_threads)
+        for i in prange(n_points, nogil=True, schedule='static', num_threads=num_threads):
+            point = points[i]
+            thread_id = omp_get_thread_num()
             if grid.boundary_points[point] and not neumann_point[point]: 
                 continue
             clock_gettime(CLOCK_REALTIME, &ts)
@@ -167,41 +179,42 @@ cdef class GLSInterpolation:
                 if grid.boundary_faces[face] == 1:
                     n_bface = n_bface + 1
             
-            m    = 3 * n_elem + n_face + n_bface
+            m    = n_elem + 3 * n_face + n_bface
             n    = 3 * n_elem + 1
             nrhs = n_elem + neumann_point[point]
             lda  = max(1, m)
             ldb  = max(1, m)
+            info = 0
 
-            for i in range(M_MAX):
-                for j in range(N_MAX):
-                    Mi[i, j] = 0.0
+            for j in range(M_MAX):
+                for k in range(N_MAX):
+                    Mi[thread_id, j, k] = 0.0
 
-            for i in range(M_MAX):
-                for j in range(NRHS_MAX):
-                    Ni[i, j] = 0.0
+            for j in range(M_MAX):
+                for k in range(NRHS_MAX):
+                    Ni[thread_id, j, k] = 0.0
 
             self.build_ks_sv_arrays(grid, point, 
-                                    KSetv, Sv, Svb, 
+                                    KSetv[thread_id], Sv[thread_id], Svb[thread_id], 
                                     n_elem, n_face, n_bface)
             
-            self.build_ls_matrices(grid, point, KSetv, Sv, Svb, 
+            self.build_ls_matrices(grid, point, KSetv[thread_id], Sv[thread_id], Svb[thread_id], 
                                    n_elem, n_face, n_bface, 
                                    permeability, diff_mag, 
-                                   xv, xK, dKv, 
-                                   xS, N_sj, Ks_Sv, eta_j, 
-                                   T_sj1, T_sj2, tau_j2, tau_tsj2, 
-                                   nL1, nL2, Ij1, Ij2, temp_cross,
-                                   idx1, idx2, idx3,
-                                   Mi, Ni)
+                                   xv[thread_id], xK[thread_id], dKv[thread_id], 
+                                   xS[thread_id], N_sj[thread_id], Ks_Sv[thread_id], eta_j[thread_id], 
+                                   T_sj1[thread_id], T_sj2[thread_id], tau_j2[thread_id], tau_tsj2[thread_id], 
+                                   nL1[thread_id], nL2[thread_id], Ij1[thread_id], Ij2[thread_id], temp_cross[thread_id],
+                                   idx1[thread_id], idx2[thread_id], idx3[thread_id],
+                                   Mi[thread_id], Ni[thread_id])
 
             if neumann_point[point]:
-                self.set_neumann_rows(grid, point, KSetv, Sv, Svb, 
+                self.set_neumann_rows(grid, point, KSetv[thread_id], Sv[thread_id], Svb[thread_id], 
                                       n_elem, n_face, n_bface, 
                                       permeability, neumann_val, 
-                                      neumann_rows, Ks_Svb, 
-                                      nL, Ik,
-                                      Mi, Ni)
+                                      neumann_rows[thread_id], Ks_Svb[thread_id], 
+                                      nL[thread_id], Ik[thread_id],
+                                      Mi[thread_id], Ni[thread_id])
 
             clock_gettime(CLOCK_REALTIME, &ts)
             end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
@@ -212,22 +225,15 @@ cdef class GLSInterpolation:
             start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
             
             self.solve_ls(point, neumann_point[point], 
-                          Mi, Ni, 
+                          Mi[thread_id], Ni[thread_id], 
                           m, n, nrhs,
                           lda, ldb,
-                          work, lwork,
+                          work[thread_id], lwork,
                           weights, neumann_ws)
-            
-            if self.logging and self.first_point:
-                self.logger.json("first_point", self.log_dict)
 
             clock_gettime(CLOCK_REALTIME, &ts)
             end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
             solve_time += end_time - start_time
-
-            
-            
-            self.first_point = False
             
         
         if self.logging:
@@ -245,7 +251,7 @@ cdef class GLSInterpolation:
 
     cdef void build_ks_sv_arrays(self, Grid grid, int point, 
                                  DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb, 
-                                 const int n_elem, const int n_face, const int n_bface):
+                                 const int n_elem, const int n_face, const int n_bface) noexcept nogil:
         cdef:
             int i, j
             int face
@@ -259,22 +265,6 @@ cdef class GLSInterpolation:
             if grid.boundary_faces[face] == 1:
                 Svb[j] = face
                 j = j + 1
-        
-        cdef:
-            dict temp_dict
-        
-        if self.logging and self.first_point:
-            temp_dict = {
-                "point": point,
-                "KSetv": KSetv[:n_elem],
-                "Sv": Sv[:n_face],
-                "Svb": Svb[:n_bface]
-            }
-            for key in temp_dict:
-                try:
-                    self.log_dict[key] = np.asarray(temp_dict[key]) 
-                except:
-                    self.log_dict[key] = temp_dict[key]
 
 
     cdef void build_ls_matrices(self, Grid grid, int point, 
@@ -286,7 +276,7 @@ cdef class GLSInterpolation:
                                 DTYPE_F_t[:, ::1] T_sj1, DTYPE_F_t[:, ::1] T_sj2, DTYPE_F_t[::1] tau_j2, DTYPE_F_t[:, ::1] tau_tsj2,
                                 DTYPE_F_t[:, ::1] nL1, DTYPE_F_t[:, ::1] nL2, DTYPE_I_t[::1] Ij1, DTYPE_I_t[::1] Ij2, DTYPE_F_t[::1] temp_cross,
                                 DTYPE_I_t[::1] idx1, DTYPE_I_t[::1] idx2, DTYPE_I_t[::1] idx3,
-                                DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni):
+                                DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni) noexcept nogil:
 
         cdef:
             int i, j, k
@@ -383,54 +373,20 @@ cdef class GLSInterpolation:
             self._set_mi(idx3[i], 3 * Ij1[i], tau_tsj2[i], Mi,-1)
             self._set_mi(idx3[i], 3 * Ij2[i], tau_tsj2[i], Mi, 1)
         
-        cdef:
-            str key
-            dict temp_dict
-        if self.logging and self.first_point:
-
-            temp_dict = {
-                "n_iface": n_iface,
-                "xv": xv,
-                "xK": xK[:n_elem],
-                "dKv": dKv[:n_elem],
-                "xS": xS[:n_iface],
-                "N_sj": N_sj[:n_iface],
-                "Ks_Sv": Ks_Sv[:n_iface],
-                "eta_j": eta_j[:n_iface],
-                "T_sj1": T_sj1[:n_iface],
-                "T_sj2": T_sj2[:n_iface],
-                "tau_j2": tau_j2[:n_iface],
-                "tau_tsj2": tau_tsj2[:n_iface],
-                "nL1": nL1[:n_iface],
-                "nL2": nL2[:n_iface],
-                "Ij1": Ij1[:n_iface],
-                "Ij2": Ij2[:n_iface],
-                "idx1": idx1[:n_iface],
-                "idx2": idx2[:n_iface],
-                "idx3": idx3[:n_iface],
-                "Mi": Mi,
-                "Ni": Ni
-            }
-            for key in temp_dict:
-                try:
-                    self.log_dict[key] = np.asarray(temp_dict[key]) 
-                except:
-                    self.log_dict[key] = temp_dict[key]
-        
     cdef void _set_mi(self, 
                      const int row, const int col, 
-                     const DTYPE_F_t[::1] v, DTYPE_F_t[::1, :] Mi, int k):
+                     const DTYPE_F_t[::1] v, DTYPE_F_t[:, ::1] Mi, int k) noexcept nogil:
             Mi[row, col]     = v[0] * k
             Mi[row, col + 1] = v[1] * k
             Mi[row, col + 2] = v[2] * k
 
-    cdef void cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b, DTYPE_F_t[::1] c):
+    cdef void cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b, DTYPE_F_t[::1] c) noexcept nogil:
     
         c[0] = a[1] * b[2] - a[2] * b[1]
         c[1] = a[2] * b[0] - a[0] * b[2]
         c[2] = a[0] * b[1] - a[1] * b[0]
     
-    cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a):
+    cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a) noexcept nogil:
         return sqrt(a[0] ** 2 + a[1] ** 2 + a[2] ** 2)
 
     cdef void set_neumann_rows(self, Grid grid,
@@ -439,7 +395,7 @@ cdef class GLSInterpolation:
                                DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
                                DTYPE_I_t[::1] neumann_rows, DTYPE_I_t[:, ::1] Ks_Svb, 
                                DTYPE_F_t[:, ::1] nL, DTYPE_I_t[::1] Ik,
-                               DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni):
+                               DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni) noexcept nogil:
         cdef:
             int i, j, k
 
@@ -480,31 +436,46 @@ cdef class GLSInterpolation:
         
     
     cdef void solve_ls(self, int point, int is_neumann,
-                       DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni, 
+                       DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni, 
                        int m, int n, int nrhs,
                        int lda, int ldb,
                        DTYPE_F_t[::1] work, int lwork,
-                       DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
+                       DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws) noexcept nogil:
         cdef:
             int i, j
+            int row, col
             int info = 0
-            DTYPE_F_t[::1, :] A = Mi.copy_fortran()
-            DTYPE_F_t[::1, :] B = Ni.copy_fortran()
+            double* A = NULL
+            double* B = NULL
+
         cdef:
             double start_time = 0., end_time = 0.
             timespec ts
-        
+
+        A = <double*>malloc(m * n * sizeof(double))
+        if not A:
+            return
+
+        B = <double*>malloc(m * nrhs * sizeof(double))
+        if not B:
+            free(A)
+            return
+
+        for col in range(n):
+            for row in range(m):
+                A[row + col * lda] = Mi[row, col]
+
+        for col in range(nrhs):
+            for row in range(m):
+                B[row + col * ldb] = Ni[row, col]
+
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-   
-        lapack.dgels('N', &m, &n, &nrhs, &A[0, 0], &lda, &B[0, 0], &ldb, &work[0], &lwork, &info)
+
+        lapack.dgels('N', &m, &n, &nrhs, A, &lda, B, &ldb, &work[0], &lwork, &info)
     
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-
-        if info:
-            if self.logging:
-                self.logger.log(f"Failed to solve LS system in point {point}. Info: {info}", "ERROR")
         
         self.only_dgels += end_time - start_time
         cdef:
@@ -512,31 +483,12 @@ cdef class GLSInterpolation:
             int w_total = nrhs - is_neumann
         
         for i in range(w_total):
-            weights[point, i] = B[M_size - 1, i]
-        
-        if is_neumann:
-            neumann_ws[point] = B[M_size - 1, w_total - 1]
+            weights[point, i] = 0
+            weights[point, i] += B[(M_size - 1) + i * ldb]
 
-        cdef:
-            str key
-            dict temp_dict
-        
-        if self.logging and self.first_point:
-            temp_dict = {
-                "m": m,
-                "n": n,
-                "nrhs": nrhs,
-                "lda": lda,
-                "ldb": ldb,
-                "lwork": lwork,
-                "M_size": M_size,
-                "w_total": w_total,
-                "A": A,
-                "B": B,
-            }
-            for key in temp_dict:
-                try:
-                    self.log_dict[key] = np.asarray(temp_dict[key]) 
-                except:
-                    self.log_dict[key] = temp_dict[key]
+        if is_neumann:
+            neumann_ws[point] = 0
+            neumann_ws[point] += B[(M_size - 1) + (w_total - 1) * ldb]
+        free(A)
+        free(B)
         

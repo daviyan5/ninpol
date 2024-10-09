@@ -36,13 +36,13 @@ cdef class GLSInterpolation:
                   DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
 
     cdef view.array array(self, tuple shape, str t)
-    cdef void cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b, DTYPE_F_t[::1] c)
-    cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a)
+    cdef void cross(self, const DTYPE_F_t[::1] a, const DTYPE_F_t[::1] b, DTYPE_F_t[::1] c) noexcept nogil 
+    cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a) noexcept nogil
     
     
     cdef void build_ks_sv_arrays(self, Grid grid, int point, 
                                  DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb, 
-                                 const int n_elem, const int n_face, const int n_bface)
+                                 const int n_elem, const int n_face, const int n_bface) noexcept nogil
 
     cdef void build_ls_matrices(self, Grid grid, int point, 
                                 const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
@@ -53,11 +53,11 @@ cdef class GLSInterpolation:
                                 DTYPE_F_t[:, ::1] T_sj1, DTYPE_F_t[:, ::1] T_sj2, DTYPE_F_t[::1] tau_j2, DTYPE_F_t[:, ::1] tau_tsj2,
                                 DTYPE_F_t[:, ::1] nL1, DTYPE_F_t[:, ::1] nL2, DTYPE_I_t[::1] Ij1, DTYPE_I_t[::1] Ij2, DTYPE_F_t[::1] temp_cross,
                                 DTYPE_I_t[::1] idx1, DTYPE_I_t[::1] idx2, DTYPE_I_t[::1] idx3,
-                                DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni)
+                                DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni) noexcept nogil
     
     cdef void _set_mi(self, 
                      const int row, const int col, 
-                     const DTYPE_F_t[::1] v, DTYPE_F_t[::1, :] Mi, int k)
+                     const DTYPE_F_t[::1] v, DTYPE_F_t[:, ::1] Mi, int k) noexcept nogil
 
     cdef void set_neumann_rows(self, Grid grid,
                                int point, const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
@@ -65,11 +65,11 @@ cdef class GLSInterpolation:
                                DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,
                                DTYPE_I_t[::1] neumann_rows, DTYPE_I_t[:, ::1] Ks_Svb, 
                                DTYPE_F_t[:, ::1] nL, DTYPE_I_t[::1] Ik,
-                               DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni)
+                               DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni) noexcept nogil
 
     cdef void solve_ls(self, int point, int is_neumann,
-                       DTYPE_F_t[::1, :] Mi, DTYPE_F_t[::1, :] Ni, 
+                       DTYPE_F_t[:, ::1] Mi, DTYPE_F_t[:, ::1] Ni, 
                        int m, int n, int nrhs,
                        int lda, int ldb,
                        DTYPE_F_t[::1] work, int lwork,
-                       DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
+                       DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws) noexcept nogil
