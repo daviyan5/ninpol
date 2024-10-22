@@ -8,7 +8,7 @@ cdef class IDWInterpolation:
 
     def __cinit__(self, int logging=False):
         self.logging = logging
-        self.logger  = Logger("IDW", True)
+        self.logger  = Logger("IDW")
         self.log_dict = {}
 
     cdef void prepare(self, Grid grid, 

@@ -1,7 +1,6 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION"
 cimport numpy as cnp
-cimport scipy.linalg.cython_lapack as lapack
-cimport scipy.linalg.cython_blas as blas
+
 
 cnp.import_array()                  # Needed to use NumPy C API
 

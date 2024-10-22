@@ -15,7 +15,7 @@ cdef class LSInterpolation:
     def __cinit__(self, int logging=False):
         self.logging  = logging
         self.log_dict = {}
-        self.logger   = Logger("GLS", True)
+        self.logger   = Logger("GLS")
 
 
     cdef void prepare(self, Grid grid, 

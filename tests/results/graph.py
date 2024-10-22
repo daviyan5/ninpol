@@ -308,12 +308,15 @@ def graph():
             accuracy_by_method = {method: {"l2": accuracy_data[case][mtype]["methods"][method]["error"] } for method in methods}
             for method in methods:
                 accuracy_by_method[method]["Ru"] = calc_Ru(accuracy_by_method[method]["l2"], n_points[mtype])
-
-            accuracy_csv(case, mtype, n_points, accuracy_by_method, methods)
-
+            try:
+                accuracy_csv(case, mtype, n_points, accuracy_by_method, methods)
+            except:
+                print("Error in accuracy_csv")
         accuracy_by_method = {mtype: {method: {"l2": accuracy_data[case][mtype]["methods"][method]["error"] } for method in methods} for mtype in mesh_types}
-        plot_accuracy_multi(case, n_points, accuracy_by_method, methods, mesh_types)
-
+        try:
+            plot_accuracy_multi(case, n_points, accuracy_by_method, methods, mesh_types)
+        except:
+            print("Error in plot_accuracy_multi")
     mpfa_cases = list(mpfa_data.keys())
     mpfa_methods = [method for method in mpfa_data[mpfa_cases[0]]]
     mpfa_n_points = {case: mpfa_data[case][mpfa_methods[0]]["n_points"] for case in mpfa_cases}

@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.__config__ import CONFIG
 import os
 
 from cython.parallel import prange
@@ -12,6 +11,9 @@ from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 
 from cython cimport view
 
+cimport scipy.linalg.cython_lapack as lapack
+cimport scipy.linalg.cython_blas as blas
+
 DTYPE_I = int
 DTYPE_F = float
 
@@ -19,7 +21,7 @@ cdef class GLSInterpolation:
     def __cinit__(self, int logging=False):
         self.logging  = logging
         self.log_dict = {}
-        self.logger   = Logger("GLS", False, ".gls_log")
+        self.logger   = Logger("GLS")
         self.only_dgels = 0.0
 
     cdef void prepare(self, Grid grid, 
@@ -44,25 +46,19 @@ cdef class GLSInterpolation:
             const DTYPE_I_t[::1] neumann_point = np.asarray(points_data[neumann_flag_index]).astype(DTYPE_I)
 
             const DTYPE_F_t[::1] neumann_val   = points_data[neumann_val_index]
-
-            cdef str lapack_env = "OPENBLAS_NUM_THREADS"        # Assumes OpenBLAS is used
-            cdef str scipy_lapack = "scipy-openblas"
-            cdef dict scipy_lapack_to_env = {
-                "scipy-openblas": "OPENBLAS_NUM_THREADS",
-                "scipy-atlas": "ATLAS_NUM_THREADS",
-                "scipy-mkl": "MKL_NUM_THREADS"
-            }
-        # Check if scipy is using OpenBLAS, ATLAS or MKL
-        try:
-            scipy_lapack = CONFIG['Build Dependencies']['lapack']['name']
-            lapack_env = scipy_lapack_to_env[scipy_lapack]
-        except KeyError:
-            pass
         
-        cdef str previous_lapack_env = os.environ.get(lapack_env, "1")
-        os.environ[lapack_env] = "1"
+        # Check if there's any external variable setting OPENBLAS_NUM_THREADS/MKL_NUM_THREADS; 
+        #    if there's none or the value is not 1, log a warning saying: To ensure good performance of the GLS method, set the variable to 1
+        if "OPENBLAS_NUM_THREADS" in os.environ:
+            if os.environ["OPENBLAS_NUM_THREADS"] != "1":
+                self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS to 1", "WARNING")
+        elif "MKL_NUM_THREADS" in os.environ:
+            if os.environ["MKL_NUM_THREADS"] != "1":
+                self.logger.log("To ensure good performance of the GLS method, set MKL_NUM_THREADS to 1", "WARNING")
+        else:
+            self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS or MKL_NUM_THREADS to 1", "WARNING")
+        
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
-        os.environ[lapack_env] = previous_lapack_env
 
         
     cdef void GLS(self, Grid grid, const DTYPE_I_t[::1] points, 
