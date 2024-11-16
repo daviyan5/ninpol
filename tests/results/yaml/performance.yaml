@@ -1,0 +1,246 @@
+ALH:
+  hexa:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  misc:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  prism:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  tetra:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+FAN:
+  hexa:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  misc:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  prism:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  tetra:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+LIN:
+  hexa:
+    build:
+    - 0.0006966590881347656
+    methods:
+      gls:
+        memory:
+        - 64.6328125
+        time:
+        - 0.0006937980651855469
+      idw:
+        memory:
+        - 64.87890625
+        time:
+        - 0.0002818107604980469
+      ls:
+        memory:
+        - 64.2265625
+        time:
+        - 0.00024890899658203125
+    n_points:
+    - 27
+    n_vols:
+    - 64
+  misc:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  prism:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  tetra:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+QUAD:
+  hexa:
+    build:
+    - 0.0006735324859619141
+    methods:
+      gls:
+        memory:
+        - 64.44921875
+        time:
+        - 0.010733842849731445
+      idw:
+        memory:
+        - 64.390625
+        time:
+        - 0.00028324127197265625
+      ls:
+        memory:
+        - 64.28515625
+        time:
+        - 0.0002579689025878906
+    n_points:
+    - 27
+    n_vols:
+    - 64
+  misc:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  prism:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []
+  tetra:
+    build: []
+    methods:
+      gls:
+        memory: []
+        time: []
+      idw:
+        memory: []
+        time: []
+      ls:
+        memory: []
+        time: []
+    n_points: []
+    n_vols: []

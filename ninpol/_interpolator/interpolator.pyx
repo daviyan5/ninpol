@@ -2,11 +2,15 @@
 This file contains the "Interpolator" class definition, for interpolating mesh unknows. 
 """
 import numpy as np
+import time
 import meshio
 import scipy.sparse as sp
 
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from cython.parallel import prange
+
+from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
+
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
@@ -14,7 +18,7 @@ DTYPE_F = np.float64
 
 cdef class Interpolator:
 
-    def __cinit__(self):
+    def __cinit__(self, str name = "interpolator", int logging = False, int build_edges = False):
         # Load point-ordering.yaml 
         import yaml
         import os
@@ -29,36 +33,85 @@ cdef class Interpolator:
             self.point_ordering = yaml.load(f, Loader=yaml.FullLoader)
 
         self.is_grid_initialized = False
+        self.build_edges = build_edges
+
+        self.gls = GLSInterpolation(logging)
+
+        self.idw = IDWInterpolation(logging)
+
+        self.ls  = LSInterpolation(logging)
 
         self.supported_methods = {
-            "inv_dist": distance_inverse
+            "gls": self.gls.prepare,
+            "idw": self.idw.prepare,
+            "ls":  self.ls.prepare
         }
 
         self.variable_to_index = {
             "points": {},
-            "cells": {}
+            "cells": {},
+            "faces": {}
+        }
+
+        self.types_per_dimension = {
+            0: ["vertex"],
+            1: ["line"],
+            2: ["triangle", "quad"],
+            3: ["tetra", "hexahedron", "wedge", "pyramid"]
         }
         self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+        
         self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
+        self.faces_data = np.zeros((1, 1), dtype=DTYPE_F)
+        self.faces_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
+        self.logging = logging
+        self.logger  = Logger(name)
+
     
-    def load_mesh(self, str filename = ""):
-        if filename == "":
-            raise ValueError("Either 'filename' or 'mesh' must be provided.")
+    cpdef void load_mesh(self, str filename = "", object mesh_obj = None):
+        if filename == "" and mesh_obj is None:
+            raise ValueError("Filename for the mesh or meshio.Mesh object must be provided.")
         # Loads a mesh from a file
         
-        self.mesh_obj = meshio.read(filename)
+        
+        if filename != "":
+            if self.logging:
+                self.logger.log(f"Reading mesh from {filename}", "INFO")
+            self.mesh_obj = meshio.read(filename)
+        else:
+            if self.logging:
+                self.logger.log(f"Using mesh object", "INFO")
+            self.mesh_obj = mesh_obj
 
         cdef tuple args = self.process_mesh(self.mesh_obj)
 
-        self.grid_obj = Grid(*args)
-
-        self.grid_obj.build()
+        self.grid = Grid(*args)
+        cdef:
+            double start_time = 0., end_time = 0.
+            timespec ts
         
-        self.grid_obj.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
-        self.grid_obj.calculate_cells_centroids()
-       
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
+        self.grid.build()
+        self.grid.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
+        self.grid.calculate_centroids()
+        self.grid.calculate_normal_faces()
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
+        if self.logging:
+            self.logger.log(f"Grid built in {end_time - start_time:.2f} seconds", "INFO")
+
+        
+        
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
         if self.mesh_obj.cell_data:
             self.load_cell_data()
         else:
@@ -70,12 +123,21 @@ cdef class Interpolator:
         else:
             self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
             self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
+        if self.logging:
+            self.logger.log(f"Data loaded in {end_time - start_time:.2f} seconds", "INFO")
 
         self.is_grid_initialized = True
+
+        if self.logging:
+            self.logger.log(f"Mesh loaded successfully: {self.grid.n_points} points and {self.grid.n_elems} elements.", "INFO")
+            
         
-    def process_mesh(self, object mesh):
+    cdef tuple process_mesh(self, object mesh):
         cdef:
-            int dim = mesh.points.shape[1]
+            int dim = 1
             int n_points = mesh.points.shape[0]
             int n_elems = 0
 
@@ -92,32 +154,40 @@ cdef class Interpolator:
             dict elem_type
             int type_index, i, j
 
-            DTYPE_I_t[::1] npoel       = np.ones(NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] npoel       = np.ones(NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[::1] nfael       = np.ones( NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] nfael       = np.ones( NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[:, ::1] lnofa    = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
-                                                  NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] lnofa    = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[:, :, ::1] lpofa = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
-                                                  NINPOL_MAX_FACES_PER_ELEMENT, 
-                                                  NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, :, ::1] lpofa = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT, 
+                                                  NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[::1] nedel       = np.ones( NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] nedel       = np.ones( NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, dtype=DTYPE_I) * -1
 
-            DTYPE_I_t[:, :, ::1] lpoed = np.ones((NINPOL_NUM_ELEMENT_TYPES, 
-                                                  NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, :, ::1] lpoed = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
+                                                  NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
 
-
+        # Get the dimension of the mesh
+        print(mesh.cells)
+        for key in mesh.cells:
+            for dimension in self.types_per_dimension:
+                if key.type in self.types_per_dimension[dimension]:
+                    dim = max(dim, dimension)
         
         faces_key = "faces"
         if dim == 2:
             faces_key = "edges"
         
-        for elem_type in self.point_ordering["elements"].values():
+        for elem_type_str, elem_type in self.point_ordering["elements"].items():
             type_index = elem_type["element_type"]
             npoel[type_index] = elem_type["number_of_points"]
-
+            
+            if elem_type_str not in self.types_per_dimension[dim]:
+                continue
+                
             nfael_e = len(elem_type[faces_key] if faces_key in elem_type else [])
             lnofa_e = [len(face) for face in elem_type[faces_key]] if faces_key in elem_type else []
             lpofa_e = elem_type[faces_key] if faces_key in elem_type else []
@@ -146,25 +216,29 @@ cdef class Interpolator:
 
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
+            if elem_type_str not in self.types_per_dimension[dim]:
+                continue
             n_elems += len(CellBlock.data)
 
         cdef: 
-            dict point_tag_to_index = {}
-            dict cell_tag_to_index = {}
-
-            int point_index = 0
             int cell_index = 0    
 
             int elem_type_index
             
-            DTYPE_I_t[:, ::1] connectivity   = np.ones((n_elems, NINPOL_MAX_POINTS_PER_ELEMENT), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] connectivity   = np.ones((n_elems, NinpolSizes.NINPOL_MAX_POINTS_PER_ELEMENT), dtype=DTYPE_I) * -1
             DTYPE_I_t[::1] element_types     = np.ones(n_elems, dtype=DTYPE_I) * -1
         
         for CellBlock in mesh.cells:
             elem_type_str = CellBlock.type
+
+            if elem_type_str not in self.types_per_dimension[dim]:
+                continue
+            
             elem_type_index = self.point_ordering["elements"][elem_type_str]["element_type"]
 
             for i, cell in enumerate(CellBlock.data):
+                # Sort cell points according to the following point ordering:
+                # 1 - x-axis increasing
                 for j, point in enumerate(cell):
                     connectivity[cell_index, j] = point
                 element_types[cell_index] = elem_type_index
@@ -175,16 +249,17 @@ cdef class Interpolator:
                 npoel,
                 nfael, lnofa, lpofa, 
                 nedel, lpoed,
-                connectivity, element_types)
+                connectivity, element_types,
+                self.logging, self.build_edges)
 
     
-    def load_data(self, data_dict, data_type):
+    cdef void load_data(self, dict data_dict, str data_type):
     # Data must be homogeneous
     # Only supports scalar and vector data. Each vector must have the same dimension
 
         cdef:
             int n_variables = len(data_dict)
-            int n_elements = self.grid_obj.n_elems if data_type == "cells" else self.grid_obj.n_points
+            int n_elements = self.grid.n_elems if data_type == "cells" else self.grid.n_points
             int max_shape = 1, cur_shape
 
             int i, j
@@ -210,6 +285,9 @@ cdef class Interpolator:
 
         
         for variable in data_dict:                              # Iterating over variables (e.g "pressure")
+
+            if self.logging:
+                self.logger.log(f"Loading {data_type} data for variable '{variable}'", "INFO")
             index = self.variable_to_index[data_type][variable]
             cur_shape = dimensions_array[index]
                 
@@ -232,28 +310,113 @@ cdef class Interpolator:
             self.points_data_dimensions = dimensions_array
             self.points_data = data_array
 
-    def load_cell_data(self):
+    cdef void load_cell_data(self):
         # cell_data_dict will save each variable separately for element type. We dont want that.
         
         cdef:
-            dict cell_data_dict = self.mesh_obj.cell_data
+            int dim = self.grid.dim
+            dict cell_data_dict = self.mesh_obj.cell_data_dict
+            dict cell_data = {}
             str variable
-            cnp.ndarray element_type
+            str element_type
             list aux_array  
-            int index, elem
+            int elem
 
         for variable in cell_data_dict:
             aux_array = []
-            index = 0
             for element_type in cell_data_dict[variable]:
-                aux_array.extend(element_type)
+                if element_type not in self.types_per_dimension[dim]:
+                    continue
+                aux_array.extend(cell_data_dict[variable][element_type])    # Works because the cells are (should be) indexed in order
 
-            cell_data_dict[variable] = np.array(aux_array)
+            cell_data[variable] = np.array(aux_array)
+            if variable == "permeability":
+                cell_data["diff_mag"] = self.compute_diffusion_magnitude(cell_data["permeability"])
 
-        self.load_data(cell_data_dict, "cells")
+        self.load_data(cell_data, "cells")
 
-    def load_point_data(self):
+    cdef void load_point_data(self):
         self.load_data(self.mesh_obj.point_data, "points")
+
+    cpdef void load_face_data(self, dict data_dict, DTYPE_I_t[:, ::1] face_connectivity = np.array([[]], dtype=int)):
+        """
+        Since meshio can't properly provide face data in all cases, this function shall be used
+        to load face data from a dictionary. The face_connectivity array can be provided if the user
+        believes the connectivity (inpofa) from self.grid is different from it's own. 
+        
+        Data_dict should be a dictionary with the following structure:
+        {
+            "variable_name": np.array([data])
+        }
+
+        Vector data is not supported yet.
+        """
+        
+        # If face_connectivity is not empty, let's create a mapping from the face_connectivity to the grid connectivity
+        cdef:
+            cnp.ndarray[int, ndim=2, mode="c"] A = face_connectivity
+            cnp.ndarray[int, ndim=2, mode="c"] B = self.grid.inpofa
+            DTYPE_I_t[::1] face_to_grid = np.arange(self.grid.n_faces, dtype=DTYPE_I)
+            
+        if len(face_connectivity) > 0:
+            # Create views of A and B where each row is represented as a single item
+            A_view = A.view([('', A.dtype)] * A.shape[1]).ravel()
+            B_view = B.view([('', B.dtype)] * B.shape[1]).ravel()
+            
+            # Sort B_view and get the sorted indices
+            idx_B_sorted = np.argsort(B_view)
+            B_view_sorted = B_view[idx_B_sorted]
+            
+            # Use searchsorted to find the indices of A_view in the sorted B_view
+            idx_in_B_sorted = np.searchsorted(B_view_sorted, A_view)
+            
+            # Map the indices back to the original indices in B
+            face_to_grid = idx_B_sorted[idx_in_B_sorted]
+        
+        cdef:
+            int i
+            str variable
+
+        self.faces_data = np.zeros((len(data_dict), self.grid.n_faces), dtype=DTYPE_F)
+        for i, variable in enumerate(data_dict):
+            self.variable_to_index["faces"][variable] = i
+            self.faces_data_dimensions[i] = data_dict[variable].shape[1]
+            self.faces_data[i] = data_dict[variable][face_to_grid].astype(DTYPE_F)
+
+    cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability):
+        cdef:
+            int nvols = len(permeability)
+            DTYPE_F_t[:, :, ::1] Ks = np.reshape(permeability, (nvols, 3, 3))                                    
+            cnp.ndarray detKs = np.linalg.det(Ks)                                                          
+            cnp.ndarray trKs  = np.trace(Ks, axis1=1, axis2=2)                                                   
+            DTYPE_F_t[::1] diff_mag = (1 - (3 * (detKs ** (1 / 3)) / trKs)) ** 2      
+
+        return diff_mag   
+
+    def get_dict(self):
+        cdef dict data_dict
+
+        data_dict = {
+            "point_ordering": self.point_ordering,
+
+            "variable_to_index": self.variable_to_index,
+
+            "cells_data": self.cells_data,
+            "cells_data_dimensions": self.cells_data_dimensions,
+
+            "points_data": self.points_data,
+            "points_data_dimensions": self.points_data_dimensions,
+        }
+
+        # Convert memoryviews to np arrays
+        data_dict["cells_data"] = np.asarray(data_dict["cells_data"])
+        data_dict["cells_data_dimensions"] = np.asarray(data_dict["cells_data_dimensions"])
+
+        data_dict["points_data"] = np.asarray(data_dict["points_data"])
+        data_dict["points_data_dimensions"] = np.asarray(data_dict["points_data_dimensions"])
+        # Print type of every variable
+        
+        return data_dict
 
     def get_data(self, str data_type, DTYPE_I_t[::1] index, str variable):
         cdef int data_index = 0
@@ -267,8 +430,8 @@ cdef class Interpolator:
                 raise ValueError(f"Variable '{variable}' not found in points data.")
             data_index = self.variable_to_index["points"][variable]
             return np.asarray(self.points_data[data_index])[index]
-
-    def interpolate(self, DTYPE_I_t[::1] target_points, str variable,  str method, int return_value = False):
+    
+    cpdef tuple interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
         
         if not self.is_grid_initialized:
             raise ValueError("Grid not initialized. Please load a mesh first.")
@@ -276,109 +439,122 @@ cdef class Interpolator:
         if method not in self.supported_methods:
             raise ValueError(f"Method '{method}' not supported. Supported methods are: {list(self.supported_methods.keys())}")
 
+        if len(target_points) == 0:
+            target_points = np.arange(self.grid.n_points, dtype=DTYPE_I)
 
         cdef:
             int data_index = 0
             int data_dimension = 1
-            DTYPE_F_t[::1] source_data = np.zeros(1, dtype=DTYPE_F)
-            str source_type = "cells"
 
-       
         if variable not in self.variable_to_index["cells"]:
-            raise ValueError(f"Variable '{variable}' not found in cells data.")
+            raise ValueError(f"Variable '{variable}' not found in cells data. Point -> Cell interpolation not supported yet.")
 
         data_index     = self.variable_to_index["cells"][variable]
-        source_data    = self.cells_data[data_index]
         data_dimension = self.cells_data_dimensions[data_index]
         
-        cdef DTYPE_F_t[:, ::1] weights, connectivity_val, connectivity_idx
+        if data_dimension > 1:
+            raise ValueError(f"Variable '{variable}' has more than one dimension. Vector data not supported yet.")
 
-        # The value of the interpolation is the product of the lines of the 
-        # weight matrix with the lines of the connectivity matrix, and the sum of the results for each line
-        weights, connectivity_idx, connectivity_val = self.prepare_interpolator(method, source_data, data_dimension, target_points)
+        cdef: 
+            DTYPE_F_t[:, ::1] weights 
+            DTYPE_F_t[::1] neumann_ws
 
+        if self.logging:
+            self.logger.log(f"Interpolating variable '{variable}' using method '{method}'", "INFO")
 
-        if return_value:
-            # Multiply the weights by the connectivity, element-wise, and sum
-            cdef:
-                int i
-                DTYPE_F_t[:, ::1] unsummed_result = np.multiply(weights, connectivity_val)
-                DTYPE_F_t[:, ::1] result = np.zeros((len(target_points), data_dimension), dtype=DTYPE_F)
+        weights, neumann_ws = self.prepare_interpolator(method, variable, target_points)
+        
+        cdef:
+            int i, j
+            int n_target    = len(target_points)
+            int n_elems     = self.grid.n_elems
+            int data_size   = self.grid.esup.shape[0]
+
+            int use_threads = min(16, np.ceil(n_target / 400))
+
+            
+            
+        if self.logging:
+            self.logger.log(f"Interpolation prepared successfully", "INFO")
+        
+        
+        cdef:
+            int point
+            float start_time = 0., end_time = 0.
+            timespec ts
+            DTYPE_I_t[::1] rows = np.ones(data_size, dtype=DTYPE_I) * -1
+            DTYPE_I_t[::1] cols = np.ones(data_size, dtype=DTYPE_I) * -1
+            DTYPE_F_t[::1] data = np.ones(data_size, dtype=DTYPE_F) * -1    
+
+        # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
+        index = 0
+        
+
+        if self.logging:
+            self.logger.log(f"Building sparse matrix with {data_size} non-zero elements", "INFO")
+            clock_gettime(CLOCK_REALTIME, &ts)
+            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+
+        #for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
+        for i in range(n_target):
+            point   = target_points[i]
+            for j in range(self.grid.esup_ptr[point], self.grid.esup_ptr[point + 1]):
                 
-            for i in range(data_dimension):
-                result[:, i] = np.sum(unsummed_result[:, i::data_dimension], axis=1)
-
-            # Remove unnecessary dimensions
-            return np.squeeze(result)
-
-        else:
-            # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
-            cdef:
-                int n_target = len(target_points)
-                int n_elems = self.grid_obj.n_elems * data_dimension
-                int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
-                int i, j, k
-                int index
-
-                DTYPE_I_t[::1] rows = np.zeros(n_target * n_columns, dtype=DTYPE_I)
-                DTYPE_I_t[::1] cols = np.zeros(n_target * n_columns, dtype=DTYPE_I)   
-                DTYPE_F_t[::1] data = np.zeros(n_target * n_columns, dtype=DTYPE_F)         
-                int use_threads = min(8, np.ceil(n_target / 800))
-
-            omp_set_num_threads(use_threads)
-            for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
-                for j in range(self.grid_obj.MX_ELEMENTS_PER_POINT):
-                    for k in range(data_dimension):
-                        index = i * n_columns + j * data_dimension + k
-                        rows[index] = i
-                        cols[index] = connectivity_idx[i, j] * data_dimension + k
-                        data[index] = weights[i, j * data_dimension + k]
-            
-            cdef:
-                sp.csr_matrix weights_sparse = sp.csr_matrix((data, (rows, cols)), shape=(n_target, n_elems))
-            return weights_sparse
-
-    cdef tuple prepare_interpolator(self, str method, 
-                                   const DTYPE_F_t[::1] source_variable, const int data_dimension, 
-                                   const DTYPE_I_t[::1] target_points):
+                rows[j] = point
+                cols[j] = self.grid.esup[j]
+                data[j] = weights[i, j - self.grid.esup_ptr[point]] + neumann_ws[i]
         
+        cdef:
+            object weights_sparse
+        weights_sparse = sp.csr_matrix((data, (rows, cols)), 
+                                        shape=(n_target, n_elems))
+        weights_sparse.eliminate_zeros()
         
-        cdef int n_target = len(target_points)
-        cdef int n_columns = self.grid_obj.MX_ELEMENTS_PER_POINT * data_dimension
-        cdef int dim = self.grid_obj.n_dims
+        if self.logging:
+            clock_gettime(CLOCK_REALTIME, &ts)
+            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+            self.logger.log(f"Returning Weights matrix ({end_time - start_time:.2f})", "INFO")
+        return weights_sparse, np.asarray(neumann_ws)
 
-        cdef DTYPE_F_t[:, ::1] connectivity_val  = np.zeros((n_target, n_columns), dtype=DTYPE_F)
-        cdef DTYPE_I_t[:, ::1] connectivity_idx  = np.ones((n_target, self.grid_obj.MX_ELEMENTS_PER_POINT), dtype=DTYPE_I) * -1
-        cdef DTYPE_F_t[:, ::1] weights           = np.zeros((n_target, n_columns), dtype=DTYPE_F)
+    cdef tuple prepare_interpolator(self, str method, str variable,
+                                    const DTYPE_I_t[::1] target_points):
+        """
+        Every interpolation method shall be called with:
+            - The Grid
+            - The Target Points
+            - Cell Data
+            - Point Data
+            - Weights Matrix  (out)
+            - Neumann Weights (out)
 
-        cdef DTYPE_F_t[:, ::1] target_coordinates = np.asarray(self.grid_obj.point_coords)[target_points]
-        cdef DTYPE_F_t[:, ::1] source_coordinates = self.grid_obj.centroids 
+        """
+        cdef:
+            int n_target = len(target_points)
+            int n_columns = self.grid.MX_ELEMENTS_PER_POINT
 
-        cdef int point, elem, first, last, i, j, k
+            double start_time = 0., end_time = 0.
+            timespec ts
 
-        # Populate connectivity_val
-        cdef int use_threads = min(8, np.ceil(n_target / 800))
-
-        omp_set_num_threads(use_threads)
-        for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
-            point = target_points[i]
-            first = self.grid_obj.esup_ptr[point]
-            last = self.grid_obj.esup_ptr[point + 1]
-            for j, elem in enumerate(self.grid_obj.esup[first:last]):
-                connectivity_idx[i, j] = elem
-                for k in range(data_dimension):
-                    connectivity_val[i, j * data_dimension + k] = source_variable[elem * data_dimension + k]
+            DTYPE_F_t[:, ::1] weights  = np.zeros((n_target, n_columns), dtype=DTYPE_F)
+            DTYPE_F_t[::1] neumann_ws  = np.zeros(n_target, dtype=DTYPE_F)
         
-        if method == "inv_dist":
-            
-            
-            self.supported_methods[method](
-                dim,
-                target_coordinates, source_coordinates, 
-                data_dimension,
-                connectivity_idx, weights   
-            )
-        
-        return weights, connectivity_idx, connectivity_val
+        if self.logging:
+            self.logger.log(f"Preparing interpolator for method '{method}'", "INFO")
+            clock_gettime(CLOCK_REALTIME, &ts)
+            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
+        self.supported_methods[method](
+            self.grid, 
+            self.cells_data, self.points_data, self.faces_data,
+            self.variable_to_index, 
+            variable,
+            target_points, 
+            weights, neumann_ws
+        )
 
+        if self.logging:
+            clock_gettime(CLOCK_REALTIME, &ts)
+            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+            self.logger.log(f"Interpolation done in {end_time - start_time:.2f} seconds", "INFO")
+
+        return weights, neumann_ws

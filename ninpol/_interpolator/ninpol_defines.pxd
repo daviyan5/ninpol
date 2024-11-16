@@ -1,4 +1,5 @@
-cpdef enum:
+
+cdef enum NinpolSizes:
     NINPOL_MAX_POINTS_PER_ELEMENT   = 8
     NINPOL_MAX_FACES_PER_ELEMENT    = 6
     NINPOL_MAX_POINTS_PER_FACE      = 4

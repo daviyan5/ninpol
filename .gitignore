@@ -11,6 +11,11 @@ tmp/*
 cython_debug/*
 *.vtk
 *.msh
+*.mesh
 *.vtu
 *.npy
 *.log
+ninpol.egg-info/*
+.pytest_cache/*
+.vscode/*
+*.json
