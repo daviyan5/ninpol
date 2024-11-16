@@ -22,7 +22,6 @@ cdef class GLSInterpolation:
         self.logging  = logging
         self.log_dict = {}
         self.logger   = Logger("GLS")
-        self.only_dgels = 0.0
 
     cdef void prepare(self, Grid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
@@ -39,7 +38,7 @@ cdef class GLSInterpolation:
             int neumann_val_index  = variable_to_index["points"]["neumann" + "_" + variable]
 
             DTYPE_F_t[:, :, ::1] permeability  = np.reshape(cells_data[permeability_index], 
-                                                            (grid.n_elems, dim, dim))
+                                                            (grid.n_elems, 3, 3))
             
             const DTYPE_F_t[::1] diff_mag      = cells_data[diff_mag_index]
 
@@ -152,13 +151,13 @@ cdef class GLSInterpolation:
 
             timespec ts
 
-        self.only_dgels = 0.0
         self.first_point = False
 
         
 
         omp_set_num_threads(num_threads)
         for i in prange(n_points, nogil=True, schedule='static', num_threads=num_threads):
+        # for i in range(n_points): # Debug
             point = points[i]
             thread_id = omp_get_thread_num()
             if grid.boundary_points[point] and not neumann_point[point]: 
@@ -233,9 +232,9 @@ cdef class GLSInterpolation:
             
         
         if self.logging:
-            self.logger.log(f"GLS: build {build_time:.2f} s, Solve {solve_time:.2f} s, DGELS {self.only_dgels:.2f}", "INFO")
+            self.logger.log(f"GLS: build {build_time:.2f} s, Solve {solve_time:.2f} s", "INFO")
 
-    cdef view.array array(self, tuple shape, str t):
+    cdef view.array array(self, tuple shape, str t):    
         if t == 'i':
             return view.array(shape=shape, itemsize=sizeof(int), format="i", mode='c')
         elif t == 'l':
@@ -473,7 +472,6 @@ cdef class GLSInterpolation:
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
         
-        self.only_dgels += end_time - start_time
         cdef:
             int M_size  = n
             int w_total = nrhs - is_neumann

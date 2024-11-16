@@ -137,7 +137,7 @@ cdef class Interpolator:
         
     cdef tuple process_mesh(self, object mesh):
         cdef:
-            int dim = mesh.points.shape[1]
+            int dim = 1
             int n_points = mesh.points.shape[0]
             int n_elems = 0
 
@@ -170,7 +170,12 @@ cdef class Interpolator:
             DTYPE_I_t[:, :, ::1] lpoed = np.ones((NinpolSizes.NINPOL_NUM_ELEMENT_TYPES, 
                                                   NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
 
-
+        # Get the dimension of the mesh
+        print(mesh.cells)
+        for key in mesh.cells:
+            for dimension in self.types_per_dimension:
+                if key.type in self.types_per_dimension[dimension]:
+                    dim = max(dim, dimension)
         
         faces_key = "faces"
         if dim == 2:
@@ -182,7 +187,7 @@ cdef class Interpolator:
             
             if elem_type_str not in self.types_per_dimension[dim]:
                 continue
-
+                
             nfael_e = len(elem_type[faces_key] if faces_key in elem_type else [])
             lnofa_e = [len(face) for face in elem_type[faces_key]] if faces_key in elem_type else []
             lpofa_e = elem_type[faces_key] if faces_key in elem_type else []

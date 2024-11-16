@@ -74,23 +74,29 @@ cdef class LSInterpolation:
                 Iyz = Iyz + voly * volz
                 Izz = Izz + volz * volz
 
+            if Iz == 0.0 and Izz == 0.0 and Ixz == 0.0 and Iyz == 0.0:
+                Izz = 1.0
+
             D = (
                 Ixx * (Iyy * Izz - Iyz * Iyz) +
                 Ixy * (Iyz * Ixz - Ixy * Izz) +
                 Ixz * (Ixy * Iyz - Iyy * Ixz)
             )
+            if Iz == 0.0 and Izz == 0.0 and Ixz == 0.0 and Iyz == 0.0:
+                Izz = -1.0
+            
             lambda_x = ( 
                 Ix * (Iyz * Iyz - Iyy * Izz) +
                 Iy * (Ixy * Izz - Iyz * Ixz) +
                 Iz * (Iyy * Ixz - Ixy * Iyz)
             ) / D
-
+            
             lambda_y = (
                 Ix * (Ixy * Izz - Iyz * Ixz) +
                 Iy * (Ixz * Ixz - Ixx * Izz) +
                 Iz * (Ixx * Iyz - Ixy * Ixz)
             ) / D
-
+            
             lambda_z = (
                 Ix * (Iyy * Ixz - Ixy * Iyz) + 
                 Iy * (Ixx * Iyz - Ixy * Ixz) +

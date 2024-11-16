@@ -142,7 +142,7 @@ class TestPerformance:
         print("\n==========================================================================================")        
         style("INDEX", "FILE", "CASE", "POINT", "METHOD", "BUILD", "INTER", "MEM", True)
 
-        mesh_types = ["hexa", "tetra", "prism"]
+        mesh_types = ["hexa", "tetra", "prism", "misc"]
         interpolator = ninpol.Interpolator(logging=False, build_edges=False)
 
         results_dict = {
@@ -169,8 +169,10 @@ class TestPerformance:
             
             for j, case in enumerate(cases):
                 mesh_path = os.path.join(mesh_dir, mesh_filename)
-                mtype = [mtype for mtype in mesh_types if mtype in mesh_filename][0]
-
+                try:
+                    mtype = [mtype for mtype in mesh_types if mtype in mesh_filename][0]
+                except:
+                    mtype = "misc"
                 block_print()
                 if os.path.exists(f"/tmp/{case.name}_{mesh_filename}.pkl"):
                     case = pickle.load(open(f"/tmp/{case.name}_{mesh_filename}.pkl", "rb"))

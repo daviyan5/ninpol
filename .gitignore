@@ -11,6 +11,7 @@ tmp/*
 cython_debug/*
 *.vtk
 *.msh
+*.mesh
 *.vtu
 *.npy
 *.log

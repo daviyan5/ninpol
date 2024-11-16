@@ -132,7 +132,7 @@ cdef class Grid:
         self.point_coords = np.zeros((0, 0),  dtype=DTYPE_F)
         self.centroids    = np.zeros((0, 0),  dtype=DTYPE_F)
         self.faces_centers = np.zeros((0, 0), dtype=DTYPE_F)
-        self.faces_areas = np.zeros((0, 0), dtype=DTYPE_F)
+        self.faces_areas = np.zeros(0   , dtype=DTYPE_F)
 
         self.normal_faces = np.zeros((0, 0),  dtype=DTYPE_F)
 
@@ -679,6 +679,10 @@ cdef class Grid:
         
     
     cdef void load_point_coords(self, const DTYPE_F_t[:, ::1] coords):
+        if coords.shape[1] != 3:
+            # Pads every point with zeros
+            self.point_coords = np.zeros((coords.shape[0], 3), dtype=DTYPE_F)
+            self.point_coords[:, :coords.shape[1]] = coords.copy()
         self.point_coords = coords.copy()
         self.are_coords_loaded = True
 
@@ -704,7 +708,7 @@ cdef class Grid:
             int npoel_e
             int npofa
 
-        self.centroids = np.zeros((self.n_elems, self.dim), dtype=DTYPE_F)
+        self.centroids = np.zeros((self.n_elems, 3), dtype=DTYPE_F)
         
         cdef:
             float machine_epsilon = 10 ** int(np.log10(np.finfo(DTYPE_F).eps))
@@ -719,7 +723,7 @@ cdef class Grid:
                 for k in range(self.dim):
                     self.centroids[i, k] += self.point_coords[self.inpoel[i, j], k] / npoel_e
 
-        self.faces_centers = np.zeros((self.n_faces, self.dim), dtype=DTYPE_F)
+        self.faces_centers = np.zeros((self.n_faces, 3), dtype=DTYPE_F)
         omp_set_num_threads(use_threads)
         for i in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
             npofa = 0
@@ -738,7 +742,7 @@ cdef class Grid:
         # For each face, select the 3 first points and calculate the normal to the face.
         # Then, normalize it
 
-        self.normal_faces = np.zeros((self.n_faces, self.dim), dtype=DTYPE_F)
+        self.normal_faces = np.zeros((self.n_faces, 3), dtype=DTYPE_F)
         cdef:
             int i, j, k
             int face = 0
@@ -752,52 +756,74 @@ cdef class Grid:
             float norm = 0.0
             int use_threads = min(16, np.ceil(self.n_faces / 400))
 
+            int npofa = 0
+
         self.faces_areas = np.zeros(self.n_faces, dtype=DTYPE_F)
-        omp_set_num_threads(use_threads)
-        for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
-            npofa  = 3 if self.inpofa[face, 3] == -1 else 4
-            point1 = self.inpofa[face, 0]
-            point2 = self.inpofa[face, 1]
-            point3 = self.inpofa[face, 2]
-            
-            v1x = self.point_coords[point1, 0] - self.point_coords[point2, 0]
-            v1y = self.point_coords[point1, 1] - self.point_coords[point2, 1]
-            v1z = self.point_coords[point1, 2] - self.point_coords[point2, 2]
+        if self.dim == 3:
+            omp_set_num_threads(use_threads)
+            for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
+                npofa  = 3 if self.inpofa[face, 3] == -1 else 4
+                point1 = self.inpofa[face, 0]
+                point2 = self.inpofa[face, 1]
+                point3 = self.inpofa[face, 2]
+                
+                v1x = self.point_coords[point1, 0] - self.point_coords[point2, 0]
+                v1y = self.point_coords[point1, 1] - self.point_coords[point2, 1]
+                v1z = self.point_coords[point1, 2] - self.point_coords[point2, 2]
 
-            v2x = self.point_coords[point3, 0] - self.point_coords[point2, 0]
-            v2y = self.point_coords[point3, 1] - self.point_coords[point2, 1]
-            v2z = self.point_coords[point3, 2] - self.point_coords[point2, 2]
-
-            normalx = v1y * v2z - v1z * v2y
-            normaly = v1z * v2x - v1x * v2z
-            normalz = v1x * v2y - v1y * v2x
-
-            norm = sqrt(normalx * normalx + normaly * normaly + normalz * normalz)
-            norm = abs(norm)
-            
-            self.normal_faces[face, 0] = normalx / norm
-            self.normal_faces[face, 1] = normaly / norm
-            self.normal_faces[face, 2] = normalz / norm
-            if npofa == 3:
-                self.faces_areas[face] = norm / 2.0
-            else:
-                # since the first triangle was 1 - 2 and 3 - 2, the second triangle is 1 - 4 and 3 - 4
-                point4 = self.inpofa[face, 3]
-                v1x = self.point_coords[point1, 0] - self.point_coords[point4, 0]
-                v1y = self.point_coords[point1, 1] - self.point_coords[point4, 1]
-                v1z = self.point_coords[point1, 2] - self.point_coords[point4, 2]
-
-                v2x = self.point_coords[point3, 0] - self.point_coords[point4, 0]
-                v2y = self.point_coords[point3, 1] - self.point_coords[point4, 1]
-                v2z = self.point_coords[point3, 2] - self.point_coords[point4, 2]
+                v2x = self.point_coords[point3, 0] - self.point_coords[point2, 0]
+                v2y = self.point_coords[point3, 1] - self.point_coords[point2, 1]
+                v2z = self.point_coords[point3, 2] - self.point_coords[point2, 2]
 
                 normalx = v1y * v2z - v1z * v2y
                 normaly = v1z * v2x - v1x * v2z
                 normalz = v1x * v2y - v1y * v2x
 
-                self.faces_areas[face] = (norm + sqrt(normalx * normalx + normaly * normaly + normalz * normalz)) / 2.0
+                norm = sqrt(normalx * normalx + normaly * normaly + normalz * normalz)
+                norm = abs(norm)
                 
-        
+                self.normal_faces[face, 0] = normalx / norm
+                self.normal_faces[face, 1] = normaly / norm
+                self.normal_faces[face, 2] = normalz / norm
+                if npofa == 3:
+                    self.faces_areas[face] = norm / 2.0
+                else:
+                    # since the first triangle was 1 - 2 and 3 - 2, the second triangle is 1 - 4 and 3 - 4
+                    point4 = self.inpofa[face, 3]
+                    v1x = self.point_coords[point1, 0] - self.point_coords[point4, 0]
+                    v1y = self.point_coords[point1, 1] - self.point_coords[point4, 1]
+                    v1z = self.point_coords[point1, 2] - self.point_coords[point4, 2]
+
+                    v2x = self.point_coords[point3, 0] - self.point_coords[point4, 0]
+                    v2y = self.point_coords[point3, 1] - self.point_coords[point4, 1]
+                    v2z = self.point_coords[point3, 2] - self.point_coords[point4, 2]
+
+                    normalx = v1y * v2z - v1z * v2y
+                    normaly = v1z * v2x - v1x * v2z
+                    normalz = v1x * v2y - v1y * v2x
+
+                    self.faces_areas[face] = (norm + sqrt(normalx * normalx + normaly * normaly + normalz * normalz)) / 2.0
+        else:
+            omp_set_num_threads(use_threads)
+            for face in prange(self.n_faces, nogil=True, schedule='static', num_threads=use_threads):
+                # Faces are edges in 2D
+                point1 = self.inpofa[face, 0]
+                point2 = self.inpofa[face, 1] 
+
+                v1x = self.point_coords[point1, 0] - self.point_coords[point2, 0]
+                v1y = self.point_coords[point1, 1] - self.point_coords[point2, 1]
+                
+                normalx = -v1y
+                normaly = v1x
+
+                norm = sqrt(normalx * normalx + normaly * normaly)
+                norm = abs(norm)
+
+                self.normal_faces[face, 0] = normalx / norm
+                self.normal_faces[face, 1] = normaly / norm
+                self.normal_faces[face, 2] = 0.0
+
+                self.faces_areas[face] = norm
         
         
         self.are_normals_calculated = True

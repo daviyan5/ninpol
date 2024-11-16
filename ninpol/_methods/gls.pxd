@@ -19,8 +19,6 @@ cdef class GLSInterpolation:
     cdef readonly Logger logger
     cdef dict log_dict
 
-    cdef readonly double only_dgels
-
     cdef void prepare(self, Grid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,

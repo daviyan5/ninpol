@@ -149,7 +149,7 @@ cdef class Grid:
     cdef readonly DTYPE_F_t[:, ::1] centroids
     cdef readonly DTYPE_F_t[:, ::1] normal_faces
     cdef readonly DTYPE_F_t[:, ::1] faces_centers
-    cdef readonly DTYPE_F_t[:, ::1] faces_areas
+    cdef readonly DTYPE_F_t[::1] faces_areas
     
     cdef readonly DTYPE_I_t[::1] boundary_faces
 

@@ -110,10 +110,6 @@ cdef class LPEW3Interpolation:
         
         return face_area * height
             
-        
-        
-        
-        
 
     cdef double flux_term(self, DTYPE_F_t[::1] v1, DTYPE_F_t[:, ::1] K, DTYPE_F_t[::1] v2):
         pass

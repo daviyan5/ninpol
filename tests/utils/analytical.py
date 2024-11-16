@@ -83,15 +83,21 @@ def evaluate_neumann(lambdified_func, K_vals, n_vals, x_vals, y_vals, z_vals):
 
 
 def clean_mesh(mesh):
-    # Remove Non-3D cells
-    valid = {
-        "wedge",
-        "hexahedron",
-        "tetra"
+    # Remove Non-Dimension cells
+    dim = 1
+    types_per_dimension = {
+        0: ["vertex"],
+        1: ["line"],
+        2: ["triangle", "quad"],
+        3: ["tetra", "hexahedron", "wedge", "pyramid"]
     }
+    for key in mesh.cells:
+        for dim_key in types_per_dimension:
+            if key.type in types_per_dimension[dim_key]:
+                dim = max(dim, dim_key)
     valid_cells = []
     for index, key in enumerate(mesh.cells_dict):
-        if key in valid:
+        if key in types_per_dimension[dim]:
             valid_cells.append(index)
     mesh.cells = [mesh.cells[i] for i in valid_cells]
     mesh.cell_data = {}
