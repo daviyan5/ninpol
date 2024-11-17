@@ -50,12 +50,12 @@ cdef class GLSInterpolation:
         #    if there's none or the value is not 1, log a warning saying: To ensure good performance of the GLS method, set the variable to 1
         if "OPENBLAS_NUM_THREADS" in os.environ:
             if os.environ["OPENBLAS_NUM_THREADS"] != "1":
-                self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS to 1", "WARNING")
+                self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS to 1", "WARN")
         elif "MKL_NUM_THREADS" in os.environ:
             if os.environ["MKL_NUM_THREADS"] != "1":
-                self.logger.log("To ensure good performance of the GLS method, set MKL_NUM_THREADS to 1", "WARNING")
+                self.logger.log("To ensure good performance of the GLS method, set MKL_NUM_THREADS to 1", "WARN")
         else:
-            self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS or MKL_NUM_THREADS to 1", "WARNING")
+            self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS or MKL_NUM_THREADS to 1", "WARN")
         
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
 
