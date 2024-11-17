@@ -147,8 +147,11 @@ cdef class Grid:
         
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+
+        # Builds esup_ptr and esup 
         self.build_esup()
         call_name = "build esup"
+        
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
@@ -158,18 +161,33 @@ cdef class Grid:
         # Calculate the points surrounding each point
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+
+        # Builds psup and psup_ptr
         self.build_psup()
         call_name = "build_psup"
+
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
             self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
-        # Calculate the faces composing each element
+        # Calculate the elements surrounding each element
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        self.build_esuel()
+        call_name = "build_esuel"
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
+        if self.logging:
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+
+        # Calculate the faces composing each element, builds infael and inpofa
         self.build_infael()
         call_name = "build_infael"
+
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
@@ -178,8 +196,11 @@ cdef class Grid:
         # Calculate the faces surrounding each point
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+
+        # Builds fsup and fsup_ptr
         self.build_fsup()
         call_name = "build_fsup"
+
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
@@ -188,18 +209,11 @@ cdef class Grid:
         # Calculate the elements surrounding each face
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
+
+        # Builds esuf and esuf_ptr
         self.build_esuf()
         call_name = "build esuf"
-        clock_gettime(CLOCK_REALTIME, &ts)
-        end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
-        
-        # Calculate the elements surrounding each element
-        clock_gettime(CLOCK_REALTIME, &ts)
-        start_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        self.build_esuel()
-        call_name = "build_esuel"
+
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
         if self.logging:
@@ -293,76 +307,48 @@ cdef class Grid:
         # Resize the psup array to remove padding
         self.psup = self.psup[:stor_ptr]
 
-
     cdef void build_infael(self):
         cdef:
-            int i, j, k
-            int elem_type
-
-            DTYPE_I_t[::1] elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-            DTYPE_I_t[::1] sorted_elem_face = np.zeros(NinpolSizes.NINPOL_MAX_POINTS_PER_FACE, dtype=DTYPE_I)
-
-            size_t key
-
-            int face_size
-            unordered_map[size_t, int] faces_dict
-
-            int unused_spaces = 0
+            int i, j, k, l
+            int ielem_type, kelem_type
             int face_index = 0
-
             int faces_upper_bound = self.n_elems * NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT
-
-            int MAX_POINTS_PER_FACE = NinpolSizes.NINPOL_MAX_POINTS_PER_FACE
-
-        self.inpofa = np.ones((faces_upper_bound, NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
+            DTYPE_I_t[:, ::1] face_to_elem = np.ones((faces_upper_bound, 2), dtype=DTYPE_I) * -1
+        
+        face_index = 0
         self.infael = np.ones((self.n_elems, NinpolSizes.NINPOL_MAX_FACES_PER_ELEMENT), dtype=DTYPE_I) * -1
-        
-        self.n_faces = 0
 
-        # For each element
         for i in range(self.n_elems):
-            elem_type = self.element_types[i]
-            
-            # For each face
-            for j in range(self.nfael[elem_type]):
+            ielem_type = self.element_types[i]
+            for j in range(self.nfael[ielem_type]):
+                if self.infael[i, j] != -1:
+                    continue
                 
-                
-                face_size = self.lnofa[elem_type, j]
-                for k in range(face_size):
-                    elem_face[k] = self.inpoel[i, self.lpofa[elem_type, j, k]]
-                    sorted_elem_face[k] = elem_face[k]
-
-                unused_spaces = MAX_POINTS_PER_FACE - face_size
-
-                for k in range(unused_spaces):
-                    elem_face[MAX_POINTS_PER_FACE - k - 1]        = -1
-                    sorted_elem_face[MAX_POINTS_PER_FACE - k - 1] = -1
-
-                
-
-                  
-                sort(&sorted_elem_face[0], (&sorted_elem_face[0]) + MAX_POINTS_PER_FACE)
-                
-
-                
-                key = myhash(sorted_elem_face, unused_spaces)
-                if faces_dict.count(key) == 0:
-                    
-                    face_index = self.n_faces
-                    faces_dict[key] = face_index
-
-                    for k in range(face_size):
-                        self.inpofa[face_index, k] = elem_face[k]
-                    
-                    self.n_faces += 1
-                    
-                else:
-                    face_index = faces_dict[key]
-
                 self.infael[i, j] = face_index
-            
-        
-        self.inpofa = self.inpofa[:self.n_faces]
+                face_index = face_index + 1
+
+                face_to_elem[self.infael[i, j], 0] = i
+                face_to_elem[self.infael[i, j], 1] = j
+                
+                k = self.esuel[i, j]
+                if k == -1:
+                    continue
+                kelem_type = self.element_types[k]
+                for l in range(self.nfael[kelem_type]):
+                    if self.esuel[k, l] == i:
+                        self.infael[k, l] = self.infael[i, j]
+                        break
+
+        self.n_faces = face_index
+        self.inpofa = np.ones((self.n_faces, NinpolSizes.NINPOL_MAX_POINTS_PER_FACE), dtype=DTYPE_I) * -1
+        cdef:
+            int face
+        for face in range(self.n_faces):
+            i = face_to_elem[face, 0]
+            j = face_to_elem[face, 1]
+            ielem_type = self.element_types[i]
+            for k in range(self.lnofa[ielem_type, j]):
+                self.inpofa[face, k] = self.inpoel[i, self.lpofa[ielem_type, j, k]]
     
     cdef void build_fsup(self):
             
@@ -470,7 +456,7 @@ cdef class Grid:
         
         # Declare every variable
         cdef:
-            int j, k, l, m
+            int j, k, l, m, o
             int ielem, jelem
             int ielem_type, jelem_type
             int unused_spaces
@@ -524,8 +510,8 @@ cdef class Grid:
                             for m in range(self.lnofa[jelem_type, l]):
                                 jelem_face_point = self.inpoel[jelem, self.lpofa[jelem_type, l, m]]
 
-                                for m in range(self.lnofa[ielem_type, j]):
-                                    if jelem_face_point == self.inpoel[ielem, self.lpofa[ielem_type, j, m]]:
+                                for o in range(self.lnofa[ielem_type, j]):
+                                    if jelem_face_point == self.inpoel[ielem, self.lpofa[ielem_type, j, o]]:
                                         is_equal = is_equal + 1
                                         break
                         

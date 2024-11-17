@@ -105,10 +105,14 @@ def clean_mesh(mesh):
 
 def l2norm_relative(measure, reference):
     sqr_sum = np.sum(reference ** 2)
+    if sqr_sum == 0:
+        return np.nan
     return np.sqrt(np.sum((measure - reference) ** 2) / sqr_sum)
 
 def l2norm_array(measure, reference):
     sqr_sum = np.sum(reference ** 2)
+    if sqr_sum == 0:
+        return np.array([np.nan for _ in range(len(measure))])
     return np.sqrt(((measure - reference) ** 2) / sqr_sum) 
 
 

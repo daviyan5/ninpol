@@ -292,6 +292,8 @@ def graph():
     # ----- Build graph -----
     cases      = list(performance_data.keys())
     mesh_types = list(performance_data[cases[0]].keys())
+    # Remove misc from mesh_types
+    mesh_types.remove("misc")
     methods    = list(performance_data[cases[0]][mesh_types[0]]["methods"].keys())
 
     build_times = {mtype: performance_data[cases[0]][mtype]["build"] for mtype in mesh_types}

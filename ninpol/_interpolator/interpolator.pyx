@@ -171,7 +171,6 @@ cdef class Interpolator:
                                                   NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
 
         # Get the dimension of the mesh
-        print(mesh.cells)
         for key in mesh.cells:
             for dimension in self.types_per_dimension:
                 if key.type in self.types_per_dimension[dimension]:
