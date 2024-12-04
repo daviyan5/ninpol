@@ -7,7 +7,6 @@ from .logger cimport Logger
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
-
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from openmp cimport omp_lock_t, omp_init_lock, omp_destroy_lock, omp_set_lock, omp_unset_lock
 
@@ -124,7 +123,7 @@ cdef class Grid:
     cdef int logging
     cdef Logger logger
 
-    cdef readonly int build_edges
+    cdef int build_edges
     
     cdef readonly int dim
 
@@ -155,9 +154,9 @@ cdef class Grid:
 
     cdef readonly DTYPE_I_t[::1] boundary_points
     
-    cdef readonly DTYPE_I_t[::1] element_types
+    cdef DTYPE_I_t[::1] element_types
 
-    cdef readonly DTYPE_I_t[::1] npoel
+    cdef DTYPE_I_t[::1] npoel
     cdef readonly DTYPE_I_t[:, ::1] inpoel
 
     cdef readonly DTYPE_I_t[::1] esup
@@ -169,9 +168,9 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[::1] fsup
     cdef readonly DTYPE_I_t[::1] fsup_ptr
 
-    cdef readonly DTYPE_I_t[::1] nfael
-    cdef readonly DTYPE_I_t[:, ::1] lnofa
-    cdef readonly DTYPE_I_t[:, :, ::1] lpofa
+    cdef DTYPE_I_t[::1] nfael
+    cdef DTYPE_I_t[:, ::1] lnofa
+    cdef DTYPE_I_t[:, :, ::1] lpofa
 
     cdef readonly DTYPE_I_t[:, ::1] inpofa
     cdef readonly DTYPE_I_t[:, ::1] infael
@@ -181,12 +180,11 @@ cdef class Grid:
 
     cdef readonly DTYPE_I_t[:, ::1] esuel
 
-    cdef readonly DTYPE_I_t[::1] nedel
-    cdef readonly DTYPE_I_t[:, :, ::1] lpoed
+    cdef DTYPE_I_t[::1] nedel
+    cdef DTYPE_I_t[:, :, ::1] lpoed
 
     cdef readonly DTYPE_I_t[:, ::1] inpoed
     cdef readonly DTYPE_I_t[:, ::1] inedel
-    
     
 
     """

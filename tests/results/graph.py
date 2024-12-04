@@ -243,6 +243,41 @@ def mpfa_csv(case, mpfa_n_points, mpfa_ninpol_times, mpfa_py_times, accuracy_per
                     row.append(np.round(Ru, 2))
                     last_error[method1] = accuracy_per_method[method1][i]
             writer.writerow(row)
+    
+    # Plot speedup graph
+    fig, ax = plt.subplots(figsize=(12, 6))
+    markers = ['o', 's', 'D']  # Different marker styles for different methods
+    original_method_name = [method.split("_")[-1].upper() for method in mpfa_ninpol_times]
+    for i, (method1, method2, ogmethod) in enumerate(zip(mpfa_ninpol_times, mpfa_py_times, original_method_name)):
+        ninpol_time = np.array(mpfa_ninpol_times[method1])
+        py_time = np.array(mpfa_py_times[method2])
+        speedup = calc_speedup(ninpol_time, py_time)
+
+        ax.plot(
+            mpfa_n_points,
+            speedup,
+            label=f"{ogmethod}",
+            color=colors[method1.split("_")[-1]],  # Extract method name (e.g., gls, idw, ls)
+            marker=markers[i % len(markers)],
+            linestyle=linestyles[method1.split("_")[-1]],
+            linewidth=2.0,
+            markersize=8,
+        )
+
+    # Formatting the graph
+    ax.set_title(f"Comparação de Speedup: {case} (ninpol vs python)", fontsize=16)
+    ax.set_xlabel("Número de Pontos", fontsize=14)
+    ax.set_ylabel("Speedup", fontsize=14)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.grid(which="both", linestyle="--", linewidth=0.5)
+    ax.minorticks_on()
+    ax.legend(loc="upper left", fontsize=12, frameon=True, shadow=True)
+
+    # Save the graph
+    plt.tight_layout()
+    plt.savefig(os.path.join(graphs_folder, f"speedup_{case}.png"), dpi=300)
+    plt.close(fig)
         
 def plot_accuracy_multi(case, n_points, accuracy_by_method, methods, mesh_types):
     fig, ax = plt.subplots(1, 3, figsize=(18, 6))

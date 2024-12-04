@@ -1,26 +1,16 @@
 """
 This file contains the "Grid" class implementation
 """
-
-cimport openmp
-
 import numpy as np
 
 from cython.parallel import prange
 from libc.math cimport sqrt
-from libc.stdio cimport printf
-from cython cimport typeof
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
 
 
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
-from libc.stdlib cimport malloc, free
-from libcpp.algorithm cimport sort
-from libcpp.string cimport string, to_string
-from ctypes import sizeof as csizeof
-
 from ..utils.robin_hood cimport unordered_map
 
 cdef size_t myhash(DTYPE_I_t[::1] vec, int unused_spaces) noexcept nogil:
@@ -70,7 +60,7 @@ cdef class Grid:
         self.MX_FACES_PER_POINT = 0
         
         self.logging = logging
-        self.logger  = Logger("Grid")
+        self.logger  = Logger("Grid", logging=self.logging)
 
         self.build_edges = build_edges
 
@@ -136,7 +126,6 @@ cdef class Grid:
 
         self.normal_faces = np.zeros((0, 0),  dtype=DTYPE_F)
 
-    
     cpdef void build(self):
         
         
@@ -154,8 +143,7 @@ cdef class Grid:
         
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
         
         
         # Calculate the points surrounding each point
@@ -168,8 +156,7 @@ cdef class Grid:
 
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
         # Calculate the elements surrounding each element
         clock_gettime(CLOCK_REALTIME, &ts)
@@ -178,8 +165,7 @@ cdef class Grid:
         call_name = "build_esuel"
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + ts.tv_nsec * 1e-9
@@ -190,8 +176,7 @@ cdef class Grid:
 
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
         
         # Calculate the faces surrounding each point
         clock_gettime(CLOCK_REALTIME, &ts)
@@ -203,8 +188,7 @@ cdef class Grid:
 
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
         # Calculate the elements surrounding each face
         clock_gettime(CLOCK_REALTIME, &ts)
@@ -216,23 +200,20 @@ cdef class Grid:
 
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-        if self.logging:
-            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
 
         # Calculate the edges surrounding each element
         if self.build_edges:
-            if self.logging:
-                self.logger.log("Grid will build edge data.", "INFO")
+            self.logger.log("Grid will build edge data.", "INFO")
             clock_gettime(CLOCK_REALTIME, &ts)
             start_time = ts.tv_sec + ts.tv_nsec * 1e-9
             self.build_inedel()
             call_name = "build_inedel"
             clock_gettime(CLOCK_REALTIME, &ts)
             end_time = ts.tv_sec + ts.tv_nsec * 1e-9
-            if self.logging:
-                self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
-        elif self.logging:
-                self.logger.log("Grid will not build edge data.", "INFO")
+            self.logger.log(f"Time to {call_name:<15}: {end_time - start_time:.3f} s", "INFO")
+        else:
+            self.logger.log("Grid will not build edge data.", "INFO")
 
         self.are_structures_built = True
     
