@@ -4,6 +4,7 @@ from cython.parallel import prange
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from openmp cimport omp_init_lock, omp_destroy_lock, omp_set_lock, omp_unset_lock, omp_lock_t
 from libc.stdio cimport printf
+from libc.math cimport sqrt
 
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 
@@ -45,6 +46,8 @@ cdef class LSInterpolation:
             int n_vols
             int point, vol, i, idx
 
+            double total_distance = 0.0
+
 
             int n_target = points.shape[0]
 
@@ -82,6 +85,24 @@ cdef class LSInterpolation:
                 Ixy * (Iyz * Ixz - Ixy * Izz) +
                 Ixz * (Ixy * Iyz - Iyy * Ixz)
             )
+
+            if D == 0.0:
+                # Use inverse distance weighting to deal with this corner case
+                total_distance = 0.0
+                for i, vol in enumerate(grid.esup[grid.esup_ptr[point]:grid.esup_ptr[point + 1]]):
+                    volx = grid.centroids[vol, 0] - grid.point_coords[point, 0]
+                    voly = grid.centroids[vol, 1] - grid.point_coords[point, 1]
+                    volz = grid.centroids[vol, 2] - grid.point_coords[point, 2]
+
+                    weights[point, i] = 1.0 / sqrt(volx * volx + voly * voly + volz * volz)
+                    total_distance = total_distance + 1.0 / sqrt(volx * volx + voly * voly + volz * volz)
+
+                for i, vol in enumerate(grid.esup[grid.esup_ptr[point]:grid.esup_ptr[point + 1]]):
+                    weights[point, i] = weights[point, i] / total_distance
+                
+                continue
+                    
+
             if Iz == 0.0 and Izz == 0.0 and Ixz == 0.0 and Iyz == 0.0:
                 Izz = -1.0
             

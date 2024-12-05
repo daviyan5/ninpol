@@ -1,0 +1,49 @@
+[build-system]
+requires = [
+  "setuptools>=61.0",
+  "wheel",
+  "Cython",
+  "numpy",
+  "scipy"
+]
+build-backend = "setuptools.build_meta"
+[project]
+name = "ninpol"
+version = "1.0.2"
+description = "Library of Nodal Interpolation Techniques for Finite Volume Schemes"
+authors = [
+  { name = "Davi Yan" }
+]
+url = "https://github.com/daviyan5/ninpol"
+keywords = [
+  "finite volume",
+  "interpolation",
+  "mpfa"
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+dependencies = [
+  "numpy",
+  "scipy",
+  "cython",
+  "meshio",
+  "pyyaml"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest"
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.cibuildwheel.linux]
+before-all = "yum install -y openblas-devel"
+skip="pp*"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-musllinux*"
+before-all = "apk add openblas"

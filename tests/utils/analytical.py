@@ -105,10 +105,14 @@ def clean_mesh(mesh):
 
 def l2norm_relative(measure, reference):
     sqr_sum = np.sum(reference ** 2)
+    if sqr_sum == 0:
+        return np.nan
     return np.sqrt(np.sum((measure - reference) ** 2) / sqr_sum)
 
 def l2norm_array(measure, reference):
     sqr_sum = np.sum(reference ** 2)
+    if sqr_sum == 0:
+        return np.array([np.nan for _ in range(len(measure))])
     return np.sqrt(((measure - reference) ** 2) / sqr_sum) 
 
 
@@ -117,7 +121,7 @@ class BaseCase():
         self.name = name
         self.expression = expression
         self.neu_expr   = evaluate_expr(expression)
-    
+
     def assign_mesh_properties(self, mesh_filename):
 
         mesh = meshio.read(mesh_filename)
@@ -133,7 +137,7 @@ class BaseCase():
 
         for index in range(len(mesh.cells)):
             centroids = np.mean(mesh.points[mesh.cells[index].data], axis=1)
-            K = self.calculate_K(mesh, index, centroids)
+            K = self.calculate_K(len(mesh.cells[index].data), centroids)
             permeability[index] = K.reshape(-1, 9)
 
             solution[index] = self.solution(
@@ -145,16 +149,31 @@ class BaseCase():
         faces_normals = np.asarray(grid.normal_faces)
 
         boundary         = np.where(np.asarray(grid.boundary_faces))[0]
-        dirichlet_faces  = boundary
-        dirichlet_points = np.asarray(grid.inpofa)[dirichlet_faces].flatten()
-        dirichlet_points = np.unique(dirichlet_points[dirichlet_points != -1])
-        
-        neumann_faces  = np.setdiff1d(boundary, dirichlet_faces)
-        neumann_points = np.asarray(grid.inpofa)[neumann_faces].flatten()
-        neumann_points = np.unique(neumann_points[neumann_points != -1])
+        self.boundary_points  = np.unique(np.asarray(grid.inpofa)[boundary].flatten())
+        self.boundary_points  = self.boundary_points[self.boundary_points != -1]
+        self.internal_points  = np.setdiff1d(np.arange(grid.n_points), self.boundary_points)
 
-        self.internal_points = np.setdiff1d(np.arange(grid.n_points), dirichlet_points)
+        rate = 1/2
+        random_indexes  = np.random.choice(len(boundary), int(len(boundary) * rate), replace=False)
+        dirichlet_faces = boundary[random_indexes]
+        neumann_faces   = np.setdiff1d(boundary, dirichlet_faces)
+
+        # A point can only be Dirichlet or Neumann. 
+        # The point will belong to the Dirichlet set if the majority of the boundary faces that it is part of are Dirichlet
+        # Otherwise, it will belong to the Neumann set
         
+        points_values = np.zeros(grid.n_points)
+        points_values[self.internal_points] = np.nan
+        dirichlet_points = np.asarray(grid.inpofa)[dirichlet_faces].flatten()
+        dirichlet_points = dirichlet_points[dirichlet_points != -1]
+        points_values[dirichlet_points] += 1
+
+        neumann_points = np.asarray(grid.inpofa)[neumann_faces].flatten()
+        neumann_points = neumann_points[neumann_points != -1]
+        points_values[neumann_points] -= 1
+
+        dirichlet_points = np.where(points_values >= 0)[0]
+        neumann_points = np.where(points_values < 0)[0]        
 
         dirichlet_flag = np.zeros(grid.n_points)
         dirichlet_flag[dirichlet_points] = 1
@@ -171,6 +190,28 @@ class BaseCase():
         )
         
         neumann = np.zeros(grid.n_points)
+        neumann_val_faces = np.zeros(grid.n_faces)
+        lamdified_func = lambdify_expr(self.neu_expr)
+
+        volumes_around_faces = np.asarray(grid.esuf)
+        volumes_around_faces = volumes_around_faces[np.asarray(grid.esuf_ptr)[boundary]]
+        
+        permeability_volumes = self.calculate_K(grid.n_elems, np.asarray(grid.centroids))
+        K_neumann = np.array(permeability_volumes)[volumes_around_faces]
+        K_neumann = K_neumann.reshape(-1, 3, 3)
+        n_neumann = faces_normals[boundary]
+        faces_centers = np.asarray(grid.faces_centers)
+        x_neumann = faces_centers[boundary, 0]
+        y_neumann = faces_centers[boundary, 1]
+        z_neumann = faces_centers[boundary, 2]
+        
+        neumann_val_faces[boundary] = evaluate_neumann(
+            lamdified_func, K_neumann, n_neumann, x_neumann, y_neumann, z_neumann
+        )
+
+        neumann[neumann_points] = np.array([np.mean(neumann_val_faces[grid.fsup[grid.fsup_ptr[point]:grid.fsup_ptr[point + 1]]]) for point in neumann_points])
+
+
         self.point_solution = self.solution(
             P[:, 0], P[:, 1], P[:, 2]
         )
@@ -195,7 +236,7 @@ class BaseCase():
         values      = weights.dot(self.vols_solution)
         values[self.dirichlet_points] = self.point_solution[self.dirichlet_points]
 
-        internal_nodes = np.setdiff1d(np.arange(len(values)), self.dirichlet_points)
+        internal_nodes = np.setdiff1d(np.arange(len(values)), self.boundary_points)
         error       = l2norm_relative(values[internal_nodes], self.point_solution[internal_nodes])
         error_array = l2norm_array(values, self.point_solution)
         
@@ -209,12 +250,12 @@ class LINCase(BaseCase):
     def __init__(self):
         super().__init__("LIN", "x + y + z")
 
-    def calculate_K(self, mesh, index, centroids=None):
+    def calculate_K(self, n, centroids=None):
         Ku = np.array( [[1.0, 0.5, 0.0], 
                         [0.5, 1.0, 0.5], 
                         [0.0, 0.5, 1.0]])
         
-        K = np.zeros((len(mesh.cells[index].data), 3, 3))
+        K = np.zeros((n, 3, 3))
         K[:, :, :] = Ku
         return K
     
@@ -225,12 +266,12 @@ class QUADCase(BaseCase):
     def __init__(self):
         super().__init__("QUAD", "x**2 + y**2 + z**2")
 
-    def calculate_K(self, mesh, index, centroids=None):
+    def calculate_K(self, n, centroids=None):
         Ku = np.array( [[1.0, 0.5, 0.0], 
                         [0.5, 1.0, 0.5], 
                         [0.0, 0.5, 1.0]])
         
-        K = np.zeros((len(mesh.cells[index].data), 3, 3))
+        K = np.zeros((n, 3, 3))
         K[:, :, :] = Ku
         return K
     
@@ -241,13 +282,13 @@ class FANcase(BaseCase):
     def __init__(self):
         super().__init__("FAN", "sin(2 * pi * x) * sin(2 * pi * y) * sin(2 * pi * z)")
 
-    def calculate_K(self, mesh, index, centroids=None):
+    def calculate_K(self, n, centroids=None):
         Ku = np.array(
             [[2464.36,    0.0, 1148.68], 
              [    0.0, 536.64,     0.0], 
              [1148.68,    0.0,  536.64]]
         )
-        K = np.zeros((len(mesh.cells[index].data), 3, 3))
+        K = np.zeros((n, 3, 3))
         K[:, :, :] = Ku
         return K
     
@@ -259,9 +300,9 @@ class ALHcase(BaseCase):
     def __init__(self):
         super().__init__("ALH", "x**3 * y**2 * z + x * sin(2 * pi * x * z) * sin(2 * pi * x * y) * sin(2 * pi * z)")
 
-    def calculate_K(self, mesh, index, centroids=None):
+    def calculate_K(self, n, centroids=None):
         # Initialize the K array with shape (n, 3, 3) where n is the length of x, y, z
-        K = np.zeros((len(mesh.cells[index].data), 3, 3))
+        K = np.zeros((n, 3, 3))
 
         x = centroids[:, 0]
         y = centroids[:, 1]

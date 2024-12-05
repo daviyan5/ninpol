@@ -6,6 +6,7 @@ from .ninpol_defines cimport *
 cimport numpy as cnp
 cnp.import_array()                  # Needed to use NumPy C API
 
+
 from libc.stdio cimport printf
 from cython.parallel import prange
 cimport openmp
@@ -34,16 +35,20 @@ cdef class Interpolator:
     cdef readonly IDWInterpolation idw
     cdef readonly LSInterpolation ls
     
-    cdef readonly dict variable_to_index
+    cdef readonly str CACHE_PATH
 
-    cdef readonly DTYPE_F_t[:, ::1] cells_data
-    cdef readonly DTYPE_I_t[::1] cells_data_dimensions
+    cdef dict variable_to_index
 
-    cdef readonly DTYPE_F_t[:, ::1] points_data
-    cdef readonly DTYPE_I_t[::1] points_data_dimensions
+    cdef DTYPE_F_t[:, ::1] cells_data
+    cdef DTYPE_I_t[::1] cells_data_dimensions
 
-    cdef readonly DTYPE_F_t[:, ::1] faces_data
-    cdef readonly DTYPE_I_t[::1] faces_data_dimensions
+    cdef DTYPE_F_t[:, ::1] points_data
+    cdef DTYPE_I_t[::1] points_data_dimensions
+
+    cdef DTYPE_F_t[:, ::1] faces_data
+    cdef DTYPE_I_t[::1] faces_data_dimensions
+
+    cdef DTYPE_F_t[:, ::1] points_coords
     
     cdef readonly int logging
     cdef readonly Logger logger
@@ -51,6 +56,9 @@ cdef class Interpolator:
     cdef readonly int build_edges
 
     cdef readonly int is_grid_initialized
+    
+    cdef dict make_cache(self, tuple args)
+    cdef void load_cache(self, dict cache_dict)
 
     cdef tuple process_mesh(self, object mesh)
     cpdef void load_mesh(self, str filename = *, object mesh_obj = *)

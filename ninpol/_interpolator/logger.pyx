@@ -11,7 +11,7 @@ from _ctypes import PyObj_FromPtr
 from ..utils import common
 
 cdef class Logger:
-    def __cinit__(self, str log_name, int terminal = True, str directory=""):
+    def __cinit__(self, str log_name, int terminal = True, str directory="", int logging=False):
         self.last_index = 0
         cdef str suffix = "-" + datetime.now().strftime('%y%m%d')
 
@@ -29,6 +29,7 @@ cdef class Logger:
         self.filename = os.path.join(self.directory, self.filename)
         self.json_filename = os.path.join(self.directory, self.json_filename)
 
+        self.logging = logging
         self.data = {}
         if not terminal:
             if not os.path.exists(self.directory):
@@ -44,6 +45,8 @@ cdef class Logger:
     
 
     cdef void log(self, str message, str type):
+        if not self.logging:
+            return
         cdef:
             str full_str = f"[{type:<5}] ({datetime.now().strftime('%H:%M:%S'):<8}) {message}\n"
         if self.terminal:

@@ -50,12 +50,12 @@ cdef class GLSInterpolation:
         #    if there's none or the value is not 1, log a warning saying: To ensure good performance of the GLS method, set the variable to 1
         if "OPENBLAS_NUM_THREADS" in os.environ:
             if os.environ["OPENBLAS_NUM_THREADS"] != "1":
-                self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS to 1", "WARNING")
+                self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS to 1", "WARN")
         elif "MKL_NUM_THREADS" in os.environ:
             if os.environ["MKL_NUM_THREADS"] != "1":
-                self.logger.log("To ensure good performance of the GLS method, set MKL_NUM_THREADS to 1", "WARNING")
+                self.logger.log("To ensure good performance of the GLS method, set MKL_NUM_THREADS to 1", "WARN")
         else:
-            self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS or MKL_NUM_THREADS to 1", "WARNING")
+            self.logger.log("To ensure good performance of the GLS method, set OPENBLAS_NUM_THREADS or MKL_NUM_THREADS to 1", "WARN")
         
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
 
@@ -145,16 +145,6 @@ cdef class GLSInterpolation:
         lwork = int(work[0, 0])
         work = np.zeros((num_threads, lwork), dtype=DTYPE_F)
 
-        cdef:
-            double start_time = 0., end_time = 0.
-            double build_time = 0., solve_time = 0.
-
-            timespec ts
-
-        self.first_point = False
-
-        
-
         omp_set_num_threads(num_threads)
         for i in prange(n_points, nogil=True, schedule='static', num_threads=num_threads):
         # for i in range(n_points): # Debug
@@ -162,8 +152,6 @@ cdef class GLSInterpolation:
             thread_id = omp_get_thread_num()
             if grid.boundary_points[point] and not neumann_point[point]: 
                 continue
-            clock_gettime(CLOCK_REALTIME, &ts)
-            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
             n_elem  = grid.esup_ptr[point + 1] - grid.esup_ptr[point]
             n_face  = grid.fsup_ptr[point + 1] - grid.fsup_ptr[point]
@@ -210,14 +198,6 @@ cdef class GLSInterpolation:
                                       neumann_rows[thread_id], Ks_Svb[thread_id], 
                                       nL[thread_id], Ik[thread_id],
                                       Mi[thread_id], Ni[thread_id])
-
-            clock_gettime(CLOCK_REALTIME, &ts)
-            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-            build_time += end_time - start_time
-
-            clock_gettime(CLOCK_REALTIME, &ts)
-            
-            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
             
             self.solve_ls(point, neumann_point[point], 
                           Mi[thread_id], Ni[thread_id], 
@@ -226,13 +206,8 @@ cdef class GLSInterpolation:
                           work[thread_id], lwork,
                           weights, neumann_ws)
 
-            clock_gettime(CLOCK_REALTIME, &ts)
-            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-            solve_time += end_time - start_time
             
-        
-        if self.logging:
-            self.logger.log(f"GLS: build {build_time:.2f} s, Solve {solve_time:.2f} s", "INFO")
+            
 
     cdef view.array array(self, tuple shape, str t):    
         if t == 'i':

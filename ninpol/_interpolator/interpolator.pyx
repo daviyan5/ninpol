@@ -2,9 +2,13 @@
 This file contains the "Interpolator" class definition, for interpolating mesh unknows. 
 """
 import numpy as np
+import scipy.sparse as sp
+
 import time
 import meshio
-import scipy.sparse as sp
+import pickle
+import tempfile
+import os
 
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from cython.parallel import prange
@@ -69,27 +73,113 @@ cdef class Interpolator:
         self.faces_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
         self.logging = logging
-        self.logger  = Logger(name)
+        self.logger  = Logger(name, logging=logging)
 
+        
+        self.CACHE_PATH = tempfile.gettempdir()
+
+    def is_cached(self, str filename):
+        if filename == "":
+            return None
+        cdef:
+            str final_path
+            str cache_name
+            int last_index
+            str little_hash 
+        
+        # hash the size of the file to hexa
+        little_hash = hex(os.path.getsize(filename))
+        last_index = len(filename.split("/")) - 1
+        cache_name = filename.split("/")[last_index].split(".")[0] + little_hash + ".pkl"
+        final_path = os.path.join(self.CACHE_PATH, cache_name)
+        if os.path.exists(final_path):
+            return final_path
+        return None
+
+    cdef dict make_cache(self, tuple args):
+        cdef:
+            dict cache
+            dict grid_cache
+            dict int_cache
+            tuple new_args
+        
+        new_args = (
+            args[0], args[1], args[2],
+            np.asarray(args[3]), 
+            np.asarray(args[4]), np.asarray(args[5]), np.asarray(args[6]),
+            np.asarray(args[7]), np.asarray(args[8]),
+            np.asarray(args[9]), np.asarray(args[10]),
+            args[11], args[12]
+        )
+        
+        int_cache = {
+            "cells_data": np.asarray(self.cells_data),
+            "cells_data_dimensions": np.asarray(self.cells_data_dimensions),
+
+            "points_data": np.asarray(self.points_data),
+            "points_data_dimensions": np.asarray(self.points_data_dimensions),
+
+            "faces_data": np.asarray(self.faces_data),
+            "faces_data_dimensions": np.asarray(self.faces_data_dimensions),
+
+            "variable_to_index": self.variable_to_index,
+            "points_coords": np.asarray(self.points_coords)
+        }
+        cache = {
+            "grid": new_args,
+            "interpolator": int_cache
+        }
+        return cache
+
+    cdef void load_cache(self, dict cache):
+        cdef:
+            dict int_cache
+            
+        self.grid = Grid(*cache["grid"])
+
+        int_cache = cache["interpolator"]
+        self.cells_data = int_cache["cells_data"]
+        self.cells_data_dimensions = int_cache["cells_data_dimensions"]
+
+        self.points_data = int_cache["points_data"]
+        self.points_data_dimensions = int_cache["points_data_dimensions"]
+
+        self.faces_data = int_cache["faces_data"]
+        self.faces_data_dimensions = int_cache["faces_data_dimensions"]
+
+        self.variable_to_index = int_cache["variable_to_index"]
+        self.points_coords = int_cache["points_coords"]
+        
     
     cpdef void load_mesh(self, str filename = "", object mesh_obj = None):
         if filename == "" and mesh_obj is None:
             raise ValueError("Filename for the mesh or meshio.Mesh object must be provided.")
         # Loads a mesh from a file
+
+        cdef:
+            object f
+            dict cache
         
+        cdef:
+            tuple args
         
-        if filename != "":
-            if self.logging:
-                self.logger.log(f"Reading mesh from {filename}", "INFO")
-            self.mesh_obj = meshio.read(filename)
+        if self.is_cached(filename):
+            self.logger.log(f"Loading mesh from cache", "INFO")
+            with open(self.is_cached(filename), "rb") as f:
+                cache = pickle.load(f)
+                self.load_cache(cache)
         else:
-            if self.logging:
+            if filename != "":
+                self.logger.log(f"Reading mesh from {filename}", "INFO")
+                self.mesh_obj = meshio.read(filename)
+            else:
                 self.logger.log(f"Using mesh object", "INFO")
-            self.mesh_obj = mesh_obj
+                self.mesh_obj = mesh_obj
 
-        cdef tuple args = self.process_mesh(self.mesh_obj)
-
-        self.grid = Grid(*args)
+            args = self.process_mesh(self.mesh_obj)
+            self.grid = Grid(*args)
+            self.points_coords = self.mesh_obj.points.astype(DTYPE_F)
+            
         cdef:
             double start_time = 0., end_time = 0.
             timespec ts
@@ -98,41 +188,53 @@ cdef class Interpolator:
         start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
         self.grid.build()
-        self.grid.load_point_coords(self.mesh_obj.points.astype(DTYPE_F))
+        self.grid.load_point_coords(self.points_coords)
         self.grid.calculate_centroids()
         self.grid.calculate_normal_faces()
         
         clock_gettime(CLOCK_REALTIME, &ts)
         end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
-        if self.logging:
-            self.logger.log(f"Grid built in {end_time - start_time:.2f} seconds", "INFO")
-
+        self.logger.log(f"Grid built in {end_time - start_time:.2f} seconds", "INFO") 
         
-        
-        clock_gettime(CLOCK_REALTIME, &ts)
-        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-        if self.mesh_obj.cell_data:
-            self.load_cell_data()
-        else:
-            self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
-            self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+        if not self.is_cached(filename):
+            clock_gettime(CLOCK_REALTIME, &ts)
+            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+            if self.mesh_obj.cell_data:
+                self.load_cell_data()
+            else:
+                self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
+                self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
-        if self.mesh_obj.point_data:
-            self.load_point_data()
-        else:
-            self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
-            self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
-        clock_gettime(CLOCK_REALTIME, &ts)
-        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+            if self.mesh_obj.point_data:
+                self.load_point_data()
+            else:
+                self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
+                self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+            clock_gettime(CLOCK_REALTIME, &ts)
+            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
-        if self.logging:
             self.logger.log(f"Data loaded in {end_time - start_time:.2f} seconds", "INFO")
 
         self.is_grid_initialized = True
 
-        if self.logging:
-            self.logger.log(f"Mesh loaded successfully: {self.grid.n_points} points and {self.grid.n_elems} elements.", "INFO")
+        cdef:
+            int last_index
+            str pkl_name
+            str final_path
+            str little_hash
+
+
+        self.logger.log(f"Mesh loaded successfully: {self.grid.n_points} points and {self.grid.n_elems} elements.", "INFO")
+        
+        if not self.is_cached(filename) and filename != "":
+            little_hash = hex(os.path.getsize(filename))
+            last_index = len(filename.split("/")) - 1
+            pkl_name = filename.split("/")[last_index].split(".")[0] + little_hash + ".pkl"
+            final_path = os.path.join(self.CACHE_PATH, pkl_name)
+            with open(final_path, "wb") as f:
+                pickle.dump(self.make_cache(args), f)
+            self.logger.log(f"Caching grid to {final_path}", "INFO")
             
         
     cdef tuple process_mesh(self, object mesh):
@@ -171,7 +273,6 @@ cdef class Interpolator:
                                                   NinpolSizes.NINPOL_MAX_EDGES_PER_ELEMENT, 2), dtype=DTYPE_I) * -1
 
         # Get the dimension of the mesh
-        print(mesh.cells)
         for key in mesh.cells:
             for dimension in self.types_per_dimension:
                 if key.type in self.types_per_dimension[dimension]:
@@ -286,8 +387,7 @@ cdef class Interpolator:
         
         for variable in data_dict:                              # Iterating over variables (e.g "pressure")
 
-            if self.logging:
-                self.logger.log(f"Loading {data_type} data for variable '{variable}'", "INFO")
+            self.logger.log(f"Loading {data_type} data for variable '{variable}'", "INFO")
             index = self.variable_to_index[data_type][variable]
             cur_shape = dimensions_array[index]
                 
@@ -459,8 +559,7 @@ cdef class Interpolator:
             DTYPE_F_t[:, ::1] weights 
             DTYPE_F_t[::1] neumann_ws
 
-        if self.logging:
-            self.logger.log(f"Interpolating variable '{variable}' using method '{method}'", "INFO")
+        self.logger.log(f"Interpolating variable '{variable}' using method '{method}'", "INFO")
 
         weights, neumann_ws = self.prepare_interpolator(method, variable, target_points)
         
@@ -474,8 +573,7 @@ cdef class Interpolator:
 
             
             
-        if self.logging:
-            self.logger.log(f"Interpolation prepared successfully", "INFO")
+        self.logger.log(f"Interpolation prepared successfully", "INFO")
         
         
         cdef:
@@ -490,10 +588,10 @@ cdef class Interpolator:
         index = 0
         
 
-        if self.logging:
-            self.logger.log(f"Building sparse matrix with {data_size} non-zero elements", "INFO")
-            clock_gettime(CLOCK_REALTIME, &ts)
-            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+        
+        self.logger.log(f"Building sparse matrix with {data_size} non-zero elements", "INFO")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
         #for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
         for i in range(n_target):
@@ -510,10 +608,9 @@ cdef class Interpolator:
                                         shape=(n_target, n_elems))
         weights_sparse.eliminate_zeros()
         
-        if self.logging:
-            clock_gettime(CLOCK_REALTIME, &ts)
-            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-            self.logger.log(f"Returning Weights matrix ({end_time - start_time:.2f})", "INFO")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+        self.logger.log(f"Returning Weights matrix ({end_time - start_time:.2f})", "INFO")
         return weights_sparse, np.asarray(neumann_ws)
 
     cdef tuple prepare_interpolator(self, str method, str variable,
@@ -538,10 +635,9 @@ cdef class Interpolator:
             DTYPE_F_t[:, ::1] weights  = np.zeros((n_target, n_columns), dtype=DTYPE_F)
             DTYPE_F_t[::1] neumann_ws  = np.zeros(n_target, dtype=DTYPE_F)
         
-        if self.logging:
-            self.logger.log(f"Preparing interpolator for method '{method}'", "INFO")
-            clock_gettime(CLOCK_REALTIME, &ts)
-            start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+        self.logger.log(f"Preparing interpolator for method '{method}'", "INFO")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
         self.supported_methods[method](
             self.grid, 
@@ -552,9 +648,8 @@ cdef class Interpolator:
             weights, neumann_ws
         )
 
-        if self.logging:
-            clock_gettime(CLOCK_REALTIME, &ts)
-            end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
-            self.logger.log(f"Interpolation done in {end_time - start_time:.2f} seconds", "INFO")
+        clock_gettime(CLOCK_REALTIME, &ts)
+        end_time = ts.tv_sec + (ts.tv_nsec / 1e9)
+        self.logger.log(f"Interpolation done in {end_time - start_time:.2f} seconds", "INFO")
 
         return weights, neumann_ws
