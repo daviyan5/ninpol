@@ -1,0 +1,3 @@
+include ninpol/_interpolator/*
+include ninpol/_methods/*
+include ninpol/utils/*

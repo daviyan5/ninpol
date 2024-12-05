@@ -1,0 +1,6 @@
+max_size: # MB
+  300
+n_repeats:
+  3
+export_mesh:
+  0
