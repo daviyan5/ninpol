@@ -9,7 +9,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 [project]
 name = "ninpol"
-version = "1.0.0"
+version = "1.0.1"
 description = "Library of Nodal Interpolation Techniques for Finite Volume Schemes"
 authors = [
   { name = "Davi Yan" }
@@ -28,9 +28,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest",
-  "pytest-cov"
+  "pytest"
 ]
 
 [tool.setuptools]
 include-package-data = true
+
+[tool.cibuildwheel.linux]
+before-all = "yum install -y openblas-devel"
+skip="pp*"
+
+[[tool.cibuildwheel.overrides]]
+select = "*-musllinux*"
+before-all = "apk add openblas"

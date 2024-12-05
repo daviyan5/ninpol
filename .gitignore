@@ -1,5 +1,7 @@
 build-helpers/clean-backup/*
 build-helpers/*.txt
+dist/*
+wheelhouse/*
 __pycache__/*
 *.pyc
 tests/test-mesh/*

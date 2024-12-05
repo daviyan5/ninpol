@@ -2,7 +2,12 @@
 # 	python3 setup.py build_ext --inplace && python3 pip install .
 all:
 	make install
-
+deploy:
+	@echo "Deploying..."
+	@cibuildwheel --platform linux --arch x86_64
+	@python -m build --sdist
+	@twine upload wheelhouse/* dist/*
+	@echo "Done"
 install: compile
 	@echo "Installing..."
 	@python3 -m pip install .

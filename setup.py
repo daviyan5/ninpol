@@ -93,7 +93,7 @@ setup(
     ext_modules = cythonize(ext_data, 
                             language_level      =   '3', 
                             nthreads            =   n_threads, 
-                            annotate            =   True, 
+                            annotate            =   is_debug, 
                             compiler_directives =   directives, 
                             force               =   force,
                             gdb_debug           =   is_debug),

@@ -55,7 +55,11 @@ while True:
                 if 'dist' in folder:
                     move_folders_to_backup(root, backup_path, folder, index)
                     index += 1
-
+        for root, dirs, files in os.walk(parent_path):
+            for folder in dirs:
+                if 'wheelhouse' in folder:
+                    move_folders_to_backup(root, backup_path, folder, index)
+                    index += 1
         # Move every .so, .html, .c file to ./backup
         move_files_by_extension(parent_path, backup_path, ('.so', '.html', '.c', '.cpp'))
 
