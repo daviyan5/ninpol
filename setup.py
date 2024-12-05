@@ -22,39 +22,39 @@ ext_data = [
         Extension(
             name = f'{project_name}._interpolator.interpolator',
             sources = [
-                os.path.join(directory_path, project_name, '_interpolator', 'interpolator.pyx')
+                os.path.join(project_name, '_interpolator', 'interpolator.pyx')
             ]
         ),
         Extension(
             name = f'{project_name}._interpolator.grid',
             sources = [
-                os.path.join(directory_path, project_name, '_interpolator', 'grid.pyx')
+                os.path.join(project_name, '_interpolator', 'grid.pyx')
             ],
             language='c++'
         ),
         Extension(
             name = f'{project_name}._methods.idw',
             sources = [
-                os.path.join(directory_path, project_name, '_methods', 'idw.pyx')
+                os.path.join(project_name, '_methods', 'idw.pyx')
             ]
         ),
         Extension(
             name = f'{project_name}._methods.gls',
             sources = [
-                os.path.join(directory_path, project_name, '_methods', 'gls.pyx')
+                os.path.join(project_name, '_methods', 'gls.pyx')
             ],
             language='c++'
         ),
         Extension(
             name = f'{project_name}._methods.ls',
             sources = [
-                os.path.join(directory_path, project_name, '_methods', 'ls.pyx')
+                os.path.join(project_name, '_methods', 'ls.pyx')
             ]
         ),
         Extension(
             name = f'{project_name}._interpolator.logger',
             sources = [
-                os.path.join(directory_path, project_name, '_interpolator', 'logger.pyx')
+                os.path.join(project_name, '_interpolator', 'logger.pyx')
             ]
         )
 ]
@@ -67,7 +67,7 @@ for e in ext_data:
     e.extra_compile_args = ['-O3', '-fopenmp'] if not is_debug else ['-O0', '-g', '-fopenmp']
     e.extra_link_args    = ['-fopenmp']
     e.define_macros      = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
-    e.include_dirs       = [np.get_include(), os.path.join(directory_path, project_name, 'utils')]
+    e.include_dirs       = [np.get_include(), os.path.join(project_name, 'utils')]
     if is_debug:
         e.define_macros.append(('CYTHON_TRACE_NOGIL', '1'))
         e.define_macros.append(('CYTHON_TRACE', '1'))
@@ -86,7 +86,6 @@ directives = {
 
 setup(
     name        =  project_name,
-    version     = '0.1.0',
     author      = 'Davi Yan',
     description = 'Library of Nodal Interpolation Techniques for Finite Volume Schemes',
     packages    = find_packages(),
@@ -98,5 +97,5 @@ setup(
                             compiler_directives =   directives, 
                             force               =   force,
                             gdb_debug           =   is_debug),
-    requires=['numpy', 'cython', 'meshio', 'pyyaml']
+    requires=['numpy', 'scipy', 'cython', 'meshio', 'pyyaml']
 )

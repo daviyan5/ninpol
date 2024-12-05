@@ -1,0 +1,36 @@
+[build-system]
+requires = [
+  "setuptools>=61.0",
+  "wheel",
+  "Cython",
+  "numpy",
+  "scipy"
+]
+build-backend = "setuptools.build_meta"
+[project]
+name = "ninpol"
+version = "1.0.0"
+description = "Library of Nodal Interpolation Techniques for Finite Volume Schemes"
+authors = [
+  { name = "Davi Yan" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+
+dependencies = [
+  "numpy",
+  "scipy",
+  "cython",
+  "meshio",
+  "pyyaml"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov"
+]
+
+[tool.setuptools]
+include-package-data = true
