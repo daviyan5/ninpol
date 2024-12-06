@@ -6,7 +6,6 @@ from openmp cimport omp_init_lock, omp_destroy_lock, omp_set_lock, omp_unset_loc
 from libc.stdio cimport printf
 from libc.math cimport sqrt
 
-from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
 
 DTYPE_I = int
 DTYPE_F = float

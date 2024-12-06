@@ -4,7 +4,7 @@ cimport numpy as cnp
 
 cnp.import_array()                  # Needed to use NumPy C API
 
-ctypedef long DTYPE_I_t
+ctypedef long long DTYPE_I_t
 ctypedef double DTYPE_F_t
 from cython cimport view
 

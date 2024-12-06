@@ -10,7 +10,7 @@ cnp.import_array()                  # Needed to use NumPy C API
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from openmp cimport omp_lock_t, omp_init_lock, omp_destroy_lock, omp_set_lock, omp_unset_lock
 
-ctypedef long    DTYPE_I_t
+ctypedef long long DTYPE_I_t
 ctypedef double  DTYPE_F_t
 
 

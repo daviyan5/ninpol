@@ -18,7 +18,7 @@ from .._methods.idw cimport IDWInterpolation
 from .._methods.gls cimport GLSInterpolation
 from .._methods.ls  cimport LSInterpolation
 
-ctypedef long DTYPE_I_t
+ctypedef long long DTYPE_I_t
 ctypedef double DTYPE_F_t
 
 

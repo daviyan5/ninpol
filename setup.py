@@ -1,5 +1,6 @@
 import os
 import sys
+import platform
 import numpy as np
 from setuptools import setup, Extension, find_packages
 from Cython.Build import cythonize
@@ -63,15 +64,38 @@ package_data = {
     project_name: ['utils/point_ordering.yaml']
 }
 
-for e in ext_data:
-    e.extra_compile_args = ['-O3', '-fopenmp'] if not is_debug else ['-O0', '-g', '-fopenmp']
-    e.extra_link_args    = ['-fopenmp']
-    e.define_macros      = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
-    e.include_dirs       = [np.get_include(), os.path.join(project_name, 'utils')]
-    if is_debug:
-        e.define_macros.append(('CYTHON_TRACE_NOGIL', '1'))
-        e.define_macros.append(('CYTHON_TRACE', '1'))
-        e.define_macros.append(('CYTHON_REFNANNY', '1'))
+# Set compiler arguments depending on the platform
+if platform.system() == 'Windows':
+    # MSVC flags
+    for e in ext_data:
+        if is_debug:
+            # Debug mode: no optimization, generate debug info
+            e.extra_compile_args = ['/Od', '/Zi', '/FItime.h']
+        else:
+            # Release mode: optimization on
+            e.extra_compile_args = ['/O2', '/FItime.h']
+        e.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+        e.include_dirs = [np.get_include(), os.path.join(project_name, 'utils'), os.path.join(project_name, 'windows')]
+        if is_debug:
+            e.define_macros += [('CYTHON_TRACE_NOGIL', '1'),
+                                ('CYTHON_TRACE', '1'),
+                                ('CYTHON_REFNANNY', '1')]
+else:
+    # Assume GCC/Clang on Linux/macOS
+    for e in ext_data:
+        if is_debug:
+            e.extra_compile_args = ['-O0', '-g', '-fopenmp']
+            e.extra_link_args = ['-fopenmp']
+        else:
+            e.extra_compile_args = ['-O3', '-fopenmp']
+            e.extra_link_args = ['-fopenmp']
+        e.define_macros = [("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+        e.include_dirs = [np.get_include(), os.path.join(project_name, 'utils')]
+        if is_debug:
+            e.define_macros += [('CYTHON_TRACE_NOGIL', '1'),
+                                ('CYTHON_TRACE', '1'),
+                                ('CYTHON_REFNANNY', '1')]
+
 
 directives = {
     'boundscheck'       : False if not is_debug else True,

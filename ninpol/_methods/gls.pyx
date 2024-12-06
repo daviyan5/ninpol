@@ -7,10 +7,22 @@ from ..utils.robin_hood cimport unordered_map
 from libc.math cimport sqrt
 from libc.stdlib cimport malloc, free
 
+cdef extern from *:
+    """
+    #ifdef _WIN32
+    #ifdef MS_WINDOWS
+    #define CLOCK_REALTIME 0
+    static int clock_gettime(int clk_id, struct timespec *tp) {
+        tp->tv_sec = 0;
+        tp->tv_nsec = 0;
+        return 0;
+    }
+    #endif
+    #endif
+    """
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
-
 from cython cimport view
-
+ 
 cimport scipy.linalg.cython_lapack as lapack
 cimport scipy.linalg.cython_blas as blas
 

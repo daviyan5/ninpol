@@ -13,8 +13,20 @@ import os
 from openmp cimport omp_set_num_threads, omp_get_num_threads, omp_get_thread_num
 from cython.parallel import prange
 
+cdef extern from *:
+    """
+    #ifdef _WIN32
+    #ifdef MS_WINDOWS
+    #define CLOCK_REALTIME 0
+    static int clock_gettime(int clk_id, struct timespec *tp) {
+        tp->tv_sec = 0;
+        tp->tv_nsec = 0;
+        return 0;
+    }
+    #endif
+    #endif
+    """
 from posix.time cimport clock_gettime, timespec, CLOCK_REALTIME
-
 
 DTYPE_I = np.int64
 DTYPE_F = np.float64
@@ -86,11 +98,13 @@ cdef class Interpolator:
             str cache_name
             int last_index
             str little_hash 
+            str divisor
         
         # hash the size of the file to hexa
         little_hash = hex(os.path.getsize(filename))
-        last_index = len(filename.split("/")) - 1
-        cache_name = filename.split("/")[last_index].split(".")[0] + little_hash + ".pkl"
+        divisor = os.path.sep
+        last_index = len(filename.split(divisor)) - 1
+        cache_name = filename.split(divisor)[last_index].split(".")[0] + little_hash + ".pkl"
         final_path = os.path.join(self.CACHE_PATH, cache_name)
         if os.path.exists(final_path):
             return final_path
@@ -223,14 +237,15 @@ cdef class Interpolator:
             str pkl_name
             str final_path
             str little_hash
-
+            str divisor
 
         self.logger.log(f"Mesh loaded successfully: {self.grid.n_points} points and {self.grid.n_elems} elements.", "INFO")
         
         if not self.is_cached(filename) and filename != "":
             little_hash = hex(os.path.getsize(filename))
-            last_index = len(filename.split("/")) - 1
-            pkl_name = filename.split("/")[last_index].split(".")[0] + little_hash + ".pkl"
+            divisor = os.path.sep
+            last_index = len(filename.split(divisor)) - 1
+            pkl_name = filename.split(divisor)[last_index].split(".")[0] + little_hash + ".pkl"
             final_path = os.path.join(self.CACHE_PATH, pkl_name)
             with open(final_path, "wb") as f:
                 pickle.dump(self.make_cache(args), f)

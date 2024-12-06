@@ -14,6 +14,7 @@ import os
 import sys
 import yaml
 import gc
+import tempfile
 
 # import from utils that is in the same directory as this file
 # change the path to the directory of this file
@@ -24,8 +25,8 @@ from colorama import Fore, Style
 from memory_profiler import memory_usage
 
 # Test parameters
-mesh_dir    = "./mesh"
-output_dir  = "./results/mesh/"
+mesh_dir    = "mesh"
+output_dir  = os.path.join("results", "mesh")
 
 def block_print():
     sys.stdout = open(os.devnull, 'w')
@@ -34,7 +35,7 @@ def enable_print():
     sys.stdout = sys.__stdout__
 
 def write_results(results_dict):
-    with open("./results/yaml/performance.yaml", "w") as f:
+    with open(os.path.join("results", "yaml", "performance_windows.yaml"), "w") as f:
         yaml.dump(results_dict, f)
 
 def export_vtk(mesh, output_dir, filename):
@@ -42,7 +43,7 @@ def export_vtk(mesh, output_dir, filename):
     points = mesh.points
     cell_data  = mesh.cell_data
     point_data = mesh.point_data
-    mesh_filename = f"{output_dir}/{filename}.vtk"
+    mesh_filename = os.path.join(f"{output_dir}",f"{filename}.vtk")
     if os.path.exists(mesh_filename):
         return mesh_filename
     meshio.write(mesh_filename, meshio.Mesh(points, cells, cell_data=cell_data, point_data=point_data))
@@ -91,7 +92,7 @@ class TestPerformance:
         if ".gitkeep" in files:
             files.remove(".gitkeep")
         
-        conf_yaml = yaml.safe_load(open("./config.yaml", "r"))
+        conf_yaml = yaml.safe_load(open("config.yaml", "r"))
         max_size = conf_yaml["max_size"]
         # Remove "box" meshes
         new_files = []
@@ -174,11 +175,12 @@ class TestPerformance:
                 except:
                     mtype = "misc"
                 block_print()
-                if os.path.exists(f"/tmp/{case.name}_{mesh_filename}.pkl"):
-                    case = pickle.load(open(f"/tmp/{case.name}_{mesh_filename}.pkl", "rb"))
+                TEMP_DIR = tempfile.gettempdir()
+                if os.path.exists(os.path.join(TEMP_DIR, f"{case.name}_{mesh_filename}.pkl")):
+                    case = pickle.load(open(os.path.join(TEMP_DIR, f"{case.name}_{mesh_filename}.pkl"), "rb"))
                 else:
                     case.assign_mesh_properties(mesh_path)
-                    pickle.dump(case, open(f"/tmp/{case.name}_{mesh_filename}.pkl", "wb"))
+                    pickle.dump(case, open(os.path.join(TEMP_DIR, f"{case.name}_{mesh_filename}.pkl"), "wb"))
                 enable_print()
                 results_dict[case.name][mtype]["n_points"].append(len(case.internal_points))
                 results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
@@ -213,13 +215,14 @@ class TestPerformance:
                         
                     print("" * 200, end="\r")
 
-                    vtk_filename = export_vtk(case.mesh, "/tmp", mesh_filename.split(".")[0])
+                    TEMP_DIR = tempfile.gettempdir()
+                    vtk_filename = export_vtk(case.mesh, TEMP_DIR, mesh_filename.split(".")[0])
 
-                    create_script("/tmp/script.py", case.name, method, vtk_filename)
+                    create_script(os.path.join(TEMP_DIR, "script.py"), case.name, method, vtk_filename)
                     
                     
                     # Create a process to run the script and use memory_profiler to get the memory usage
-                    process = run_script_in_process("/tmp/script.py")
+                    process = run_script_in_process(os.path.join(TEMP_DIR, "script.py"))
                     pid = process.pid
                     memory_usage_list = monitor_memory(pid)
                     
