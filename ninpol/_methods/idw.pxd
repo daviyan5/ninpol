@@ -7,7 +7,7 @@ ctypedef long long DTYPE_I_t
 ctypedef double DTYPE_F_t
 
 from .._interpolator.logger cimport Logger
-from .._interpolator.grid cimport Grid
+from .._interpolator.pseudo_grid cimport PseudoGrid
 from .._interpolator.ninpol_defines cimport *
 
 cdef class IDWInterpolation:
@@ -16,14 +16,14 @@ cdef class IDWInterpolation:
     cdef readonly Logger logger
     cdef dict log_dict
 
-    cdef void prepare(self, Grid grid, 
+    cdef void prepare(self, PseudoGrid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
                       const DTYPE_I_t[::1] target_points,
                       DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws)
 
-    cdef void inverse_distance(self, const int dim, Grid grid,
+    cdef void inverse_distance(self, const int dim, PseudoGrid grid,
                                const DTYPE_I_t[::1] target_points,
                                const DTYPE_F_t[:, ::1] target_coordinates, 
                                const DTYPE_F_t[:, ::1] source_coordinates,

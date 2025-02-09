@@ -137,12 +137,14 @@ cdef class Grid:
     cdef readonly int are_structures_built
     cdef readonly int are_centroids_calculated
     cdef readonly int are_normals_calculated
+    cdef readonly int is_dim_data_built
     
     cdef readonly int MX_ELEMENTS_PER_POINT
     cdef readonly int MX_POINTS_PER_POINT
     cdef readonly int MX_ELEMENTS_PER_FACE
     cdef readonly int MX_FACES_PER_POINT
     
+    cdef readonly dict dim_data
 
     cdef readonly DTYPE_F_t[:, ::1] point_coords
     cdef readonly DTYPE_F_t[:, ::1] centroids
@@ -186,7 +188,7 @@ cdef class Grid:
     cdef readonly DTYPE_I_t[:, ::1] inpoed
     cdef readonly DTYPE_I_t[:, ::1] inedel
     
-
+    
     """
         Builds the necessary grid data structures for the given connectivity matrix, that being:
             - Elements surrounding each point   (esup)
@@ -276,3 +278,7 @@ cdef class Grid:
     cdef void calculate_centroids(self)
 
     cdef void calculate_normal_faces(self)
+
+    cpdef int get_total(self, int dimension)
+
+    cpdef (DTYPE_I_t[::1], DTYPE_I_t[::1]) get_surrounding(self, int dimension_source, int dimension_target)

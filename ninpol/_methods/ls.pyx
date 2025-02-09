@@ -18,7 +18,7 @@ cdef class LSInterpolation:
         self.logger   = Logger("GLS")
 
 
-    cdef void prepare(self, Grid grid, 
+    cdef void prepare(self, PseudoGrid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
@@ -30,7 +30,7 @@ cdef class LSInterpolation:
 
         self.LS(grid, target_points, neumann_point, weights, neumann_ws)
 
-    cdef void LS(self, Grid grid,
+    cdef void LS(self, PseudoGrid grid,
                  const DTYPE_I_t[::1] points, const DTYPE_I_t[::1] neumann_point,
                  DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
         cdef:

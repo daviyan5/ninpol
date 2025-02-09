@@ -75,14 +75,17 @@ cdef class Interpolator:
             2: ["triangle", "quad"],
             3: ["tetra", "hexahedron", "wedge", "pyramid"]
         }
-        self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
-        self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
-        
         self.points_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.points_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
         self.faces_data = np.zeros((1, 1), dtype=DTYPE_F)
         self.faces_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
+        self.edges_data = np.zeros((1, 1), dtype=DTYPE_F)
+        self.edges_data_dimensions = np.zeros(1, dtype=DTYPE_I)
+
+        self.cells_data = np.zeros((1, 1), dtype=DTYPE_F)
+        self.cells_data_dimensions = np.zeros(1, dtype=DTYPE_I)
 
         self.logging = logging
         self.logger  = Logger(name, logging=logging)
@@ -127,14 +130,17 @@ cdef class Interpolator:
         )
         
         int_cache = {
-            "cells_data": np.asarray(self.cells_data),
-            "cells_data_dimensions": np.asarray(self.cells_data_dimensions),
-
             "points_data": np.asarray(self.points_data),
             "points_data_dimensions": np.asarray(self.points_data_dimensions),
 
+            "edges_data": np.asarray(self.edges_data),
+            "edges_data_dimensions": np.asarray(self.edges_data_dimensions),
+
             "faces_data": np.asarray(self.faces_data),
             "faces_data_dimensions": np.asarray(self.faces_data_dimensions),
+
+            "cells_data": np.asarray(self.cells_data),
+            "cells_data_dimensions": np.asarray(self.cells_data_dimensions),
 
             "variable_to_index": self.variable_to_index,
             "points_coords": np.asarray(self.points_coords)
@@ -152,14 +158,18 @@ cdef class Interpolator:
         self.grid = Grid(*cache["grid"])
 
         int_cache = cache["interpolator"]
-        self.cells_data = int_cache["cells_data"]
-        self.cells_data_dimensions = int_cache["cells_data_dimensions"]
 
         self.points_data = int_cache["points_data"]
         self.points_data_dimensions = int_cache["points_data_dimensions"]
 
+        self.edges_data = int_cache["edges_data"]
+        self.edges_data_dimensions = int_cache["edges_data_dimensions"]
+
         self.faces_data = int_cache["faces_data"]
         self.faces_data_dimensions = int_cache["faces_data_dimensions"]
+
+        self.cells_data = int_cache["cells_data"]
+        self.cells_data_dimensions = int_cache["cells_data_dimensions"]
 
         self.variable_to_index = int_cache["variable_to_index"]
         self.points_coords = int_cache["points_coords"]
@@ -546,26 +556,41 @@ cdef class Interpolator:
             data_index = self.variable_to_index["points"][variable]
             return np.asarray(self.points_data[data_index])[index]
     
-    cpdef tuple interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = np.array([], dtype=DTYPE_I)):
-        
+    cpdef (object, cnp.ndarray[double, ndim=1]) interpolate(self, int dimension_target, int dimension_source, 
+                                                                str variable, str method, 
+                                                                DTYPE_I_t[::1] target_indexes = *):   
         if not self.is_grid_initialized:
             raise ValueError("Grid not initialized. Please load a mesh first.")
-        
+
         if method not in self.supported_methods:
             raise ValueError(f"Method '{method}' not supported. Supported methods are: {list(self.supported_methods.keys())}")
 
-        if len(target_points) == 0:
-            target_points = np.arange(self.grid.n_points, dtype=DTYPE_I)
+        if dimension_target not in range(4):
+            raise ValueError(f"Dimension '{dimension_target}' not supported. Supported dimensions are: 0 [points], 1 [edges], 2 [faces], 3 [elements]")
+
+        if dimension_source not in range(4):
+            raise ValueError(f"Dimension '{dimension_source}' not supported. Supported dimensions are: 0 [points], 1 [edges], 2 [faces], 3 [elements]")
+        
+        if len(target_indexes) == 0:
+            target_indexes = np.arange(self.grid.get_total(dimension_target), dtype=DTYPE_I)
 
         cdef:
             int data_index = 0
             int data_dimension = 1
+            str name = "points" if dimension_source == 0 else "cells" if dimension_source == 3 else "faces"
+            
+        if variable not in self.variable_to_index[name]:
+            raise ValueError(f"Variable '{variable}' not found in {name} data.")
 
-        if variable not in self.variable_to_index["cells"]:
-            raise ValueError(f"Variable '{variable}' not found in cells data. Point -> Cell interpolation not supported yet.")
-
-        data_index     = self.variable_to_index["cells"][variable]
-        data_dimension = self.cells_data_dimensions[data_index]
+        cdef:
+            dict data_dimensions = {
+                0: self.points_data_dimensions,
+                1: self.edges_data_dimensions,
+                2: self.faces_data_dimensions,
+                3: self.cells_data_dimensions
+            }
+        data_index     = self.variable_to_index[name][variable]
+        data_dimension = data_dimensions[dimension_source][data_index]
         
         if data_dimension > 1:
             raise ValueError(f"Variable '{variable}' has more than one dimension. Vector data not supported yet.")
@@ -576,18 +601,18 @@ cdef class Interpolator:
 
         self.logger.log(f"Interpolating variable '{variable}' using method '{method}'", "INFO")
 
-        weights, neumann_ws = self.prepare_interpolator(method, variable, target_points)
+        weights, neumann_ws = self.prepare_interpolator(dimension_target, dimension_source, method, variable, target_indexes)
         
         cdef:
             int i, j
-            int n_target    = len(target_points)
-            int n_elems     = self.grid.n_elems
-            int data_size   = self.grid.esup.shape[0]
-
+            int n_target    = len(target_indexes)
+            int n_source    = self.grid.get_total(dimension_source)
+            DTYPE_I_t[::1] surrounding
+            DTYPE_I_t[::1] surrounding_ptr
+            int data_size   = surrounding.shape[0]
             int use_threads = min(16, np.ceil(n_target / 400))
 
-            
-            
+        surrounding, surrounding_ptr = self.grid.get_surrounding(dimension_source, dimension_target)
         self.logger.log(f"Interpolation prepared successfully", "INFO")
         
         
@@ -602,25 +627,24 @@ cdef class Interpolator:
         # Convert weights from (n_target, n_columns) to (n_target, n_elems) using sparse matrix
         index = 0
         
-
-        
         self.logger.log(f"Building sparse matrix with {data_size} non-zero elements", "INFO")
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
         #for i in prange(n_target, nogil=True, schedule='static', num_threads=use_threads):
         for i in range(n_target):
-            point   = target_points[i]
-            for j in range(self.grid.esup_ptr[point], self.grid.esup_ptr[point + 1]):
+            point  = target_indexes[i]
+            
+            for j in range(surrounding_ptr[point], surrounding_ptr[point + 1]):
                 
                 rows[j] = point
-                cols[j] = self.grid.esup[j]
-                data[j] = weights[i, j - self.grid.esup_ptr[point]] + neumann_ws[i]
+                cols[j] = surrounding[j]
+                data[j] = weights[i, j - surrounding_ptr[point]] + neumann_ws[i]
         
         cdef:
             object weights_sparse
         weights_sparse = sp.csr_matrix((data, (rows, cols)), 
-                                        shape=(n_target, n_elems))
+                                        shape=(n_target, n_source))
         weights_sparse.eliminate_zeros()
         
         clock_gettime(CLOCK_REALTIME, &ts)
@@ -628,20 +652,12 @@ cdef class Interpolator:
         self.logger.log(f"Returning Weights matrix ({end_time - start_time:.2f})", "INFO")
         return weights_sparse, np.asarray(neumann_ws)
 
-    cdef tuple prepare_interpolator(self, str method, str variable,
-                                    const DTYPE_I_t[::1] target_points):
-        """
-        Every interpolation method shall be called with:
-            - The Grid
-            - The Target Points
-            - Cell Data
-            - Point Data
-            - Weights Matrix  (out)
-            - Neumann Weights (out)
-
-        """
+    cdef (DTYPE_F_t[:, ::1], DTYPE_F_t[::1]) prepare_interpolator(self, int dimension_target, int dimension_source, 
+                                                                  str method, str variable,
+                                                                  const DTYPE_I_t[::1] target_indexes):
+        
         cdef:
-            int n_target = len(target_points)
+            int n_target = len(target_indexes)
             int n_columns = self.grid.MX_ELEMENTS_PER_POINT
 
             double start_time = 0., end_time = 0.
@@ -654,12 +670,15 @@ cdef class Interpolator:
         clock_gettime(CLOCK_REALTIME, &ts)
         start_time = ts.tv_sec + (ts.tv_nsec / 1e9)
 
+        cdef:
+            PseudoGrid pseudo_grid = PseudoGrid(dimension_source, dimension_source)
+        
         self.supported_methods[method](
-            self.grid, 
+            pseudo_grid, 
             self.cells_data, self.points_data, self.faces_data,
             self.variable_to_index, 
             variable,
-            target_points, 
+            target_indexes, 
             weights, neumann_ws
         )
 

@@ -15,7 +15,7 @@ cdef class LPEW3Interpolation:
         self.logger  = Logger("LPEW3")
         self.log_dict = {}
 
-    cdef void prepare(self, Grid grid, 
+    cdef void prepare(self, PseudoGrid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
@@ -35,7 +35,7 @@ cdef class LPEW3Interpolation:
 
         self.lpew3(grid, target_points, permeability, neumann_point, neumann_val, weights, neumann_ws)
     
-    cdef void lpew3(self, Grid grid, const DTYPE_I_t[::1] target_points, DTYPE_F_t[:, :, ::1] permeability, 
+    cdef void lpew3(self, PseudoGrid grid, const DTYPE_I_t[::1] target_points, DTYPE_F_t[:, :, ::1] permeability, 
                     const DTYPE_I_t[::1] neumann_point, const DTYPE_F_t[::1] neumann_val,
                     DTYPE_F_t[:, ::1] weights, DTYPE_F_t[::1] neumann_ws):
         cdef:
@@ -60,7 +60,7 @@ cdef class LPEW3Interpolation:
                 neu_term = self.neumann_treatment(grid, point, neumann_val[point])
                 neumann_ws[i] = neu_term
 
-    cdef double partial_lpew3(self, Grid grid, int point, int elem, DTYPE_F_t[:, :, ::1] permeability):
+    cdef double partial_lpew3(self, PseudoGrid grid, int point, int elem, DTYPE_F_t[:, :, ::1] permeability):
         cdef:
             const DTYPE_I_t[::1] elem_faces  = grid.infael[elem]
             const DTYPE_I_t[::1] point_faces = grid.fsup[grid.fsup_ptr[point]:grid.fsup_ptr[point+1]]
@@ -89,16 +89,16 @@ cdef class LPEW3Interpolation:
                 delta += (phi_fe + phi_e) * csi
         return zepta - delta
 
-    cdef double neumann_treatment(self, Grid grid, int point, DTYPE_F_t neumann_val):
+    cdef double neumann_treatment(self, PseudoGrid grid, int point, DTYPE_F_t neumann_val):
         pass      
 
-    cdef double phi_lpew3(self, Grid grid, int point, int face, int elem, DTYPE_F_t[:, :, ::1] permeability):
+    cdef double phi_lpew3(self, PseudoGrid grid, int point, int face, int elem, DTYPE_F_t[:, :, ::1] permeability):
         pass
     
-    cdef double psi_sum_lpew3(self, Grid grid, int point, int face, int elem, DTYPE_F_t[:, :, ::1] permeability):
+    cdef double psi_sum_lpew3(self, PseudoGrid grid, int point, int face, int elem, DTYPE_F_t[:, :, ::1] permeability):
         pass
     
-    cdef double volume(self, Grid grid, int face, DTYPE_I_t[::1] fpoints, DTYPE_F_t[::1] centroid):
+    cdef double volume(self, PseudoGrid grid, int face, DTYPE_I_t[::1] fpoints, DTYPE_F_t[::1] centroid):
         # Calculates the volume of the polyhedron formed by the points in fpoints + centroid - Is either a tetrahedron or a pyramid
         cdef:
             double face_area = grid.faces_areas[face]
@@ -114,13 +114,13 @@ cdef class LPEW3Interpolation:
     cdef double flux_term(self, DTYPE_F_t[::1] v1, DTYPE_F_t[:, ::1] K, DTYPE_F_t[::1] v2):
         pass
 
-    cdef double lambda_lpew3(self, Grid grid, int point, int aux_point, int face, DTYPE_F_t[:, :, ::1] permeability):
+    cdef double lambda_lpew3(self, PseudoGrid grid, int point, int aux_point, int face, DTYPE_F_t[:, :, ::1] permeability):
         pass
     
-    cdef double neta_lpew3(self, Grid grid, int point, int face, int elem, DTYPE_F_t[:, ::1] K):
+    cdef double neta_lpew3(self, PseudoGrid grid, int point, int face, int elem, DTYPE_F_t[:, ::1] K):
         pass
     
-    cdef double csi_lpew3(self, Grid grid, int face, int elem, DTYPE_F_t[:, ::1] K):
+    cdef double csi_lpew3(self, PseudoGrid grid, int face, int elem, DTYPE_F_t[:, ::1] K):
         cdef:
             double flux   = self.flux_term(grid.normal_faces[face], K)
             double volume = self.volume(grid, face, grid.inpofa[face], grid.centroids[elem])
@@ -128,7 +128,7 @@ cdef class LPEW3Interpolation:
         
         return csi
     
-    cdef double sigma_lpew3(self, Grid grid, int point, int elem, DTYPE_F_t[:, :, ::1] permeability):
+    cdef double sigma_lpew3(self, PseudoGrid grid, int point, int elem, DTYPE_F_t[:, :, ::1] permeability):
         pass
 
     

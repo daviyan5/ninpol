@@ -12,6 +12,7 @@ from cython.parallel import prange
 cimport openmp
 
 from .grid cimport Grid
+from .pseudo_grid cimport PseudoGrid
 from .logger cimport Logger
 
 from .._methods.idw cimport IDWInterpolation
@@ -39,14 +40,17 @@ cdef class Interpolator:
 
     cdef dict variable_to_index
 
-    cdef DTYPE_F_t[:, ::1] cells_data
-    cdef DTYPE_I_t[::1] cells_data_dimensions
-
     cdef DTYPE_F_t[:, ::1] points_data
     cdef DTYPE_I_t[::1] points_data_dimensions
 
+    cdef DTYPE_F_t[:, ::1] edges_data
+    cdef DTYPE_I_t[::1] edges_data_dimensions
+
     cdef DTYPE_F_t[:, ::1] faces_data
     cdef DTYPE_I_t[::1] faces_data_dimensions
+    
+    cdef DTYPE_F_t[:, ::1] cells_data
+    cdef DTYPE_I_t[::1] cells_data_dimensions
 
     cdef DTYPE_F_t[:, ::1] points_coords
     
@@ -70,10 +74,13 @@ cdef class Interpolator:
 
     cdef DTYPE_F_t[::1] compute_diffusion_magnitude(self, DTYPE_F_t[:, ::1] permeability)
 
-    cpdef tuple interpolate(self, str variable, str method, DTYPE_I_t[::1] target_points = *)
-    
-    cdef tuple prepare_interpolator(self, str method, str variable,
-                                    const DTYPE_I_t[::1] target_points)
+    cpdef (object, cnp.ndarray[double, ndim=1]) interpolate(self, int dimension_target, int dimension_source, 
+                                                            str variable, str method, 
+                                                            DTYPE_I_t[::1] target_indexes = *)
+        
+    cdef (DTYPE_F_t[:, ::1], DTYPE_F_t[::1]) prepare_interpolator(self, int dimension_target, int dimension_source, 
+                                                                  str method, str variable,
+                                                                  const DTYPE_I_t[::1] target_points)
 
     
 

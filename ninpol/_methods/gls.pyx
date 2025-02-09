@@ -35,7 +35,7 @@ cdef class GLSInterpolation:
         self.log_dict = {}
         self.logger   = Logger("GLS")
 
-    cdef void prepare(self, Grid grid, 
+    cdef void prepare(self, PseudoGrid grid, 
                       const DTYPE_F_t[:, ::1] cells_data, const DTYPE_F_t[:, ::1] points_data, const DTYPE_F_t[:, ::1] faces_data,
                       dict variable_to_index,
                       str variable,
@@ -72,7 +72,7 @@ cdef class GLSInterpolation:
         self.GLS(grid, target_points, permeability, diff_mag, neumann_point, neumann_val, weights, neumann_ws)
 
         
-    cdef void GLS(self, Grid grid, const DTYPE_I_t[::1] points, 
+    cdef void GLS(self, PseudoGrid grid, const DTYPE_I_t[::1] points, 
                   DTYPE_F_t[:, :, ::1] permeability, 
                   const DTYPE_F_t[::1] diff_mag, 
                   const DTYPE_I_t[::1] neumann_point, const DTYPE_F_t[::1] neumann_val,
@@ -231,7 +231,7 @@ cdef class GLSInterpolation:
         else:
             raise ValueError("Invalid type")
 
-    cdef void build_ks_sv_arrays(self, Grid grid, int point, 
+    cdef void build_ks_sv_arrays(self, PseudoGrid grid, int point, 
                                  DTYPE_I_t[::1] KSetv, DTYPE_I_t[::1] Sv, DTYPE_I_t[::1] Svb, 
                                  const int n_elem, const int n_face, const int n_bface) noexcept nogil:
         cdef:
@@ -249,7 +249,7 @@ cdef class GLSInterpolation:
                 j = j + 1
 
 
-    cdef void build_ls_matrices(self, Grid grid, int point, 
+    cdef void build_ls_matrices(self, PseudoGrid grid, int point, 
                                 const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
                                 const int n_elem, const int n_face, const int n_bface, 
                                 DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] diff_mag,
@@ -371,7 +371,7 @@ cdef class GLSInterpolation:
     cdef DTYPE_F_t norm(self, const DTYPE_F_t[::1] a) noexcept nogil:
         return sqrt(a[0] ** 2 + a[1] ** 2 + a[2] ** 2)
 
-    cdef void set_neumann_rows(self, Grid grid,
+    cdef void set_neumann_rows(self, PseudoGrid grid,
                                int point, const DTYPE_I_t[::1] KSetv, const DTYPE_I_t[::1] Sv, const DTYPE_I_t[::1] Svb, 
                                const int n_elem, const int n_face, const int n_bface, 
                                DTYPE_F_t[:, :, ::1] permeability, const DTYPE_F_t[::1] neumann_val,

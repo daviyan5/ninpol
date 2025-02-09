@@ -443,9 +443,6 @@ cdef class Grid:
                         break
                     self.boundary_points[j] = True
 
-        
-
-
     cdef void build_esuel(self):
         
         # Declare every variable
@@ -578,8 +575,7 @@ cdef class Grid:
         
         self.n_edges = edges_dict.size()
         self.inpoed = self.inpoed[:self.n_edges]
-
-                    
+   
     def get_data(self):
         """
         Returns the data of the grid as np.arrays.
@@ -657,7 +653,6 @@ cdef class Grid:
 
         return data
         
-    
     cdef void load_point_coords(self, const DTYPE_F_t[:, ::1] coords):
         if coords.shape[1] != 3:
             # Pads every point with zeros
@@ -807,3 +802,75 @@ cdef class Grid:
         
         
         self.are_normals_calculated = True
+    
+    cpdef int get_total(self, int dimension):
+        if dimension == 0:
+            return self.n_points
+        elif dimension == 1:
+            return self.n_edges
+        elif dimension == 2:
+            return self.n_faces
+        elif dimension == 3:
+            return self.n_elems
+        else:
+            raise ValueError("Invalid dimension. Must be 0, 1, 2 or 3.")
+
+    cpdef (DTYPE_I_t[::1], DTYPE_I_t[::1]) get_surrounding(self, int dimension_source, int dimension_target):
+
+        if dimension_source > 3 or dimension_source < 0:
+            raise ValueError("Invalid source dimension. Must be 0, 1, 2 or 3.")
+        if dimension_target > 3 or dimension_target < 0:
+            raise ValueError("Invalid target dimension. Must be 0, 1, 2 or 3.")
+
+        cdef:
+            int total = self.get_total(dimension_target)
+            DTYPE_I_t[::1] psued, psuf, psuel
+            DTYPE_I_t[::1] psued_ptr, psuf_ptr, psuel_ptr
+
+            DTYPE_I_t[::1] edsup, edsued, edsuf, edsuel
+            DTYPE_I_t[::1] edsup_ptr, edsued_ptr, edsuf_ptr, edsuel_ptr
+
+            DTYPE_I_t[::1] fsup, fsued, fsuf, fsuel
+            DTYPE_I_t[::1] fsup_ptr, fsued_ptr, fsuf_ptr, fsuel_ptr
+
+            DTYPE_I_t[::1] esup, esued, esuf, esuel
+            DTYPE_I_t[::1] esup_ptr, esued_ptr, esuf_ptr, esuel_ptr
+            
+        if dimension_source == 0:
+            if dimension_target == 0:
+                return self.psup, self.psup_ptr
+            if dimension_target == 1:
+                return psued, psued_ptr
+            elif dimension_target == 2:
+                return psuf, psuf_ptr
+            elif dimension_target == 3:
+                return psuel, psuel
+        elif dimension_source == 1:
+            if dimension_target == 0:
+                return edsup, edsup_ptr
+            elif dimension_target == 1:
+                return edsued, edsued_ptr
+            elif dimension_target == 2:
+                return edsuf, edsuf_ptr
+            elif dimension_target == 3:
+                return edsuel, edsuel_ptr
+        elif dimension_source == 2:
+            if dimension_target == 0:
+                return self.fsup, self.fsup_ptr
+            elif dimension_target == 1:
+                return fsued, fsued_ptr
+            elif dimension_target == 2:
+                return fsuf, fsuf_ptr
+            elif dimension_target == 3:
+                return fsuel, fsuel_ptr
+        elif dimension_source == 3:
+            if dimension_target == 0:
+                return self.esup, self.esup_ptr
+            elif dimension_target == 1:
+                return esued, esued_ptr
+            elif dimension_target == 2:
+                return self.esuf, self.esuf_ptr
+            elif dimension_target == 3:
+                return esuel, esuel_ptr
+        else:
+            raise ValueError("Invalid source dimension. Must be 0, 1, 2 or 3.")
