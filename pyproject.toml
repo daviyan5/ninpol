@@ -14,7 +14,6 @@ description = "Library of Nodal Interpolation Techniques for Finite Volume Schem
 authors = [
   { name = "Davi Yan" }
 ]
-url = "https://github.com/daviyan5/ninpol"
 keywords = [
   "finite volume",
   "interpolation",
@@ -34,7 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-  "pytest"
+  "pytest", "psutil", "pytest_subtests", "sympy", "memory_profiler"
 ]
 
 [tool.setuptools]

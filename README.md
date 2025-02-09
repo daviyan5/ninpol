@@ -46,4 +46,5 @@ python3 ./tests/results/graph.py
 ```
 
 The second command will generate the graphs and `.csv` files with the results of the tests.
-**OBS**: Requires `pytest` to be installed.
+
+**OBS**: Requires `project.optional-dependencies` to be installed.

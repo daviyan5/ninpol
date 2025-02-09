@@ -14,6 +14,7 @@ import os
 import sys
 import yaml
 import gc
+import tempfile
 
 # import from utils that is in the same directory as this file
 # change the path to the directory of this file
@@ -24,8 +25,8 @@ from colorama import Fore, Style
 from memory_profiler import memory_usage
 
 # Test parameters
-mesh_dir    = "./mesh"
-output_dir  = "./results/mesh/"
+mesh_dir    = "mesh"
+output_dir  = os.path.join("results", "mesh")
 
 def block_print():
     sys.stdout = open(os.devnull, 'w')
@@ -34,12 +35,12 @@ def enable_print():
     sys.stdout = sys.__stdout__
 
 def write_results(results_dict):
-    with open("./results/yaml/accuracy.yaml", "w") as f:
+    with open(os.path.join("results", "yaml", "accuracy_windows.yaml"), "w") as f:
         yaml.dump(results_dict, f)
 
 def export_vtu(cells, points, cell_data, point_data, output_dir, filename):
     mesh = meshio.Mesh(points, cells, cell_data=cell_data, point_data=point_data)
-    mesh_filename = f"{output_dir}/{filename}_acc.vtu"
+    mesh_filename = os.path.join(f"{output_dir}",f"{filename}_acc.vtu")
 
     if not os.path.exists(mesh_filename):
         meshio.write(mesh_filename, mesh)
@@ -60,7 +61,7 @@ class TestAccuracy:
         if ".gitkeep" in files:
             files.remove(".gitkeep")
         
-        conf_yaml = yaml.safe_load(open("./config.yaml", "r"))
+        conf_yaml = yaml.safe_load(open("config.yaml", "r"))
         max_size = conf_yaml["max_size"]
         # Remove "box" meshes
         new_files = []
@@ -122,7 +123,6 @@ class TestAccuracy:
                 results_dict[case.name][mtype]["n_points"] = []
                 results_dict[case.name][mtype]["n_vols"]   = []
 
-
         for i, mesh_filename in enumerate(files):
             
             cells       = {}
@@ -137,11 +137,12 @@ class TestAccuracy:
                 except:
                     mtype = "misc"
                 block_print()
-                if os.path.exists(f"/tmp/{case.name}_{mesh_filename}.pkl"):
-                    case = pickle.load(open(f"/tmp/{case.name}_{mesh_filename}.pkl", "rb"))
+                TEMP_DIR = tempfile.gettempdir()
+                if os.path.exists(os.path.join(TEMP_DIR, f"{case.name}_{mesh_filename}.pkl")):
+                    case = pickle.load(open(os.path.join(TEMP_DIR, f"{case.name}_{mesh_filename}.pkl"), "rb"))
                 else:
                     case.assign_mesh_properties(mesh_path)
-                    pickle.dump(case, open(f"/tmp/{case.name}_{mesh_filename}.pkl", "wb"))
+                    pickle.dump(case, open(os.path.join(TEMP_DIR, f"{case.name}_{mesh_filename}.pkl"), "wb"))
                 enable_print()
                 results_dict[case.name][mtype]["n_points"].append(len(case.internal_points))
                 results_dict[case.name][mtype]["n_vols"].append(case.mesh.cells[0].data.shape[0])
@@ -157,7 +158,7 @@ class TestAccuracy:
                     point_data[key] = case.mesh.point_data[key]
                 
                 n_methods = len(interpolator.supported_methods)
-
+                
                 print(f"Building {mesh_filename}...", end="\r")
                 block_print()
                 interpolator.load_mesh(mesh_obj=case.mesh)
